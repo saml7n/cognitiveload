@@ -135,15 +135,15 @@ As an **automation developer**, I want **a reliable, tested wrapper around the D
 This story produces a standalone Python module — no GitHub integration yet.
 
 ### Acceptance criteria
-- [ ] A Python module exists at `orchestrator/devin_client.py` with:
+- [x] A Python module exists at `orchestrator/devin_client.py` with:
   - `create_session(prompt: str, **kwargs) -> str` — returns session ID.
   - `poll_session(session_id: str, timeout: int, interval: int) -> dict` — polls with exponential backoff, returns final session state.
   - `send_message(session_id: str, message: str) -> None` — sends a follow-up message to a running session.
-- [ ] Polling handles all terminal states: `finished`, `stopped`, `blocked`.
+- [x] Polling handles all terminal states: `finished`, `stopped`, `blocked`.
   - On `blocked`: returns the state (does not hang).
   - On timeout: raises a clear exception.
-- [ ] The client reads the API key from environment variable `DEVIN_API_KEY`.
-- [ ] Unit tests exist using mocked HTTP responses (no real API calls in tests) covering:
+- [x] The client reads the API key from environment variable `DEVIN_API_KEY`.
+- [x] Unit tests exist using mocked HTTP responses (no real API calls in tests) covering:
   - successful session (working → finished)
   - session that goes blocked
   - session that times out
@@ -159,9 +159,9 @@ This story produces a standalone Python module — no GitHub integration yet.
 3. Rely on Devin's GitHub repo connection, or always instruct `git clone` explicitly in prompts?
 
 **Recorded answers:**
-- Secret name: _unanswered_
-- Snapshots/playbooks: _unanswered_
-- Repo access method: _unanswered_
+- Secret name: `DEVIN_API_KEY`
+- Execution mode: Pure prompts with `structured_output_schema`.
+- Repo access method: Rely on Devin's GitHub connection (but can fall back to clone if needed).
 
 ---
 
@@ -172,13 +172,13 @@ As an **automation developer**, I want **tested helpers for posting idempotent c
 This story produces a standalone Python module — no workflows yet.
 
 ### Acceptance criteria
-- [ ] A Python module exists at `orchestrator/github_client.py` with:
+- [x] A Python module exists at `orchestrator/github_client.py` with:
   - `find_bot_comment(repo, issue_number, marker) -> comment_id | None` — searches issue/PR comments for the stable marker.
   - `upsert_comment(repo, issue_number, marker, body) -> None` — creates or updates the bot's comment.
   - `add_labels(repo, issue_number, labels: list[str]) -> None` — adds labels without removing existing ones.
   - `get_pr_changed_files(repo, pr_number) -> list[str]` — returns list of changed file paths.
-- [ ] The module uses `GITHUB_TOKEN` from the environment.
-- [ ] Unit tests exist using mocked HTTP responses covering:
+- [x] The module uses `GITHUB_TOKEN` from the environment.
+- [x] Unit tests exist using mocked HTTP responses covering:
   - upsert when no prior comment exists (creates)
   - upsert when prior comment exists (updates)
   - add_labels adds without removing
@@ -192,8 +192,8 @@ This story produces a standalone Python module — no workflows yet.
 2. Confirm marker format (recommended: `<!-- devin-triage:v1 -->`).
 
 **Recorded answers:**
-- Label removal: _unanswered_
-- Marker format: _unanswered_
+- Label removal: Add-only (safer for PoC).
+- Marker format: `<!-- devin-triage:v1 -->`
 
 ---
 
