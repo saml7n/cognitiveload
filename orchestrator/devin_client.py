@@ -82,11 +82,11 @@ class DevinClient:
             # Fallback to "status" if "status_enum" is missing, though v1 should have it.
             status = session_data.get("status_enum", session_data.get("status"))
             
-            # Terminal states:
+            # Terminal states per Devin v1 API docs:
             # - finished: completed successfully
-            # - stopped: stopped by user or error
             # - blocked: waiting for user input
-            if status in ["finished", "stopped", "blocked"]:
+            # - expired: session timed out on Devin's side
+            if status in ["finished", "blocked", "expired", "stopped"]:
                 return session_data
             
             time.sleep(interval)

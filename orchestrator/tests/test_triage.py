@@ -50,14 +50,14 @@ class TestExtractTriageCard(unittest.TestCase):
     """Verify we can pull a triage card from various Devin response shapes."""
 
     def test_from_structured_output(self):
-        session_data = {"structured_output": VALID_CARD, "conversation": []}
+        session_data = {"structured_output": VALID_CARD, "messages": []}
         card = _extract_triage_card(session_data)
         self.assertEqual(card["classification"], "bug")
 
-    def test_from_conversation_json(self):
+    def test_from_messages_json(self):
         session_data = {
             "structured_output": None,
-            "conversation": [
+            "messages": [
                 {"message": "Let me investigate..."},
                 {"message": json.dumps(VALID_CARD)},
             ],
@@ -66,11 +66,11 @@ class TestExtractTriageCard(unittest.TestCase):
         self.assertIsNotNone(card)
         self.assertEqual(card["classification"], "bug")
 
-    def test_from_conversation_json_fenced(self):
+    def test_from_messages_json_fenced(self):
         fenced = f"Here is the triage:\n```json\n{json.dumps(VALID_CARD)}\n```"
         session_data = {
             "structured_output": None,
-            "conversation": [{"message": fenced}],
+            "messages": [{"message": fenced}],
         }
         card = _extract_triage_card(session_data)
         self.assertIsNotNone(card)
@@ -79,14 +79,14 @@ class TestExtractTriageCard(unittest.TestCase):
     def test_returns_none_when_no_valid_json(self):
         session_data = {
             "structured_output": None,
-            "conversation": [
+            "messages": [
                 {"message": "I couldn't figure it out."},
             ],
         }
         card = _extract_triage_card(session_data)
         self.assertIsNone(card)
 
-    def test_from_conversation_json_embedded_in_prose(self):
+    def test_from_messages_json_embedded_in_prose(self):
         """Devin often wraps the JSON in explanatory text without fences."""
         prose = (
             "Investigating the issue now — I'll look at the codebase "
@@ -95,7 +95,7 @@ class TestExtractTriageCard(unittest.TestCase):
         )
         session_data = {
             "structured_output": None,
-            "conversation": [
+            "messages": [
                 {"message": "Let me investigate..."},
                 {"message": prose},
             ],
@@ -155,7 +155,7 @@ class TestTriageIssue(unittest.TestCase):
         devin_instance.poll_session.return_value = {
             "status_enum": "finished",
             "structured_output": VALID_CARD,
-            "conversation": [],
+            "messages": [],
         }
 
         gh_instance = MockGH.return_value
@@ -189,7 +189,7 @@ class TestTriageIssue(unittest.TestCase):
         devin_instance.poll_session.return_value = {
             "status_enum": "finished",
             "structured_output": UNCLEAR_CARD,
-            "conversation": [],
+            "messages": [],
         }
 
         gh_instance = MockGH.return_value
@@ -215,7 +215,7 @@ class TestTriageIssue(unittest.TestCase):
         devin_instance.poll_session.return_value = {
             "status_enum": "finished",
             "structured_output": None,
-            "conversation": [{"message": "I'm confused."}],
+            "messages": [{"message": "I'm confused."}],
         }
 
         gh_instance = MockGH.return_value
@@ -245,7 +245,7 @@ class TestTriageIssue(unittest.TestCase):
         devin_instance.poll_session.return_value = {
             "status_enum": "finished",
             "structured_output": VALID_CARD,
-            "conversation": [],
+            "messages": [],
         }
 
         gh_instance = MockGH.return_value

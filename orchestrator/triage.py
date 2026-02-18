@@ -93,8 +93,10 @@ def _extract_triage_card(session_data: dict[str, Any]) -> dict[str, Any] | None:
     if isinstance(structured, dict) and validate_triage_card(structured):
         return structured
 
-    # 2. Scan conversation for a JSON blob
-    for item in reversed(session_data.get("conversation", [])):
+    # 2. Scan messages for a JSON blob
+    #    Devin API returns "messages" (not "conversation").
+    #    Each message has: type, message, timestamp, username, origin, ...
+    for item in reversed(session_data.get("messages") or session_data.get("conversation") or []):
         text = item.get("message", "") if isinstance(item, dict) else ""
         try:
             # Try to find JSON in the message (may be wrapped in markdown fences)
@@ -198,10 +200,10 @@ def triage_issue(
 
     if card is None:
         logger.warning("Could not extract a valid triage card from Devin output.")
-        # Log Devin conversation for diagnostics
-        conversation = session_data.get("conversation", [])
-        logger.info("Session had %d conversation messages.", len(conversation))
-        for i, msg in enumerate(conversation[-5:]):  # last 5 messages
+        # Log Devin messages for diagnostics
+        messages = session_data.get("messages") or session_data.get("conversation") or []
+        logger.info("Session had %d messages.", len(messages))
+        for i, msg in enumerate(messages[-5:]):  # last 5 messages
             role = msg.get("role", "?") if isinstance(msg, dict) else "?"
             text = msg.get("message", "")[:300] if isinstance(msg, dict) else str(msg)[:300]
             logger.info("  [%d] %s: %s", i, role, text)
