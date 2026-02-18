@@ -62,17 +62,17 @@ As a **VP Engineering at FinServ Co**, I want **clear rules for what this automa
 As a **demo presenter**, I want **a small but realistic app with known bugs and a passing test suite**, so that **the triage bot has something meaningful to investigate and the demo is believable**.
 
 ### Acceptance criteria
-- [ ] A `demo_app/` directory exists containing a small working application (e.g., a Python Flask/FastAPI API or a Node Express app — language TBD).
-- [ ] The app has a test suite that passes when run (`pytest` or `npm test`).
-- [ ] There are 3 intentional bugs seeded in the code, each documented in `demo_app/BUGS.md`:
+- [x] A `demo_app/` directory exists containing a small working application (e.g., a Python Flask/FastAPI API or a Node Express app — language TBD).
+- [x] The app has a test suite that passes when run (`pytest` or `npm test`).
+- [x] There are 3 intentional bugs seeded in the code, each documented in `demo_app/BUGS.md`:
   - Bug A: a clear, well-described bug with an obvious fix (e.g., off-by-one in a calculation endpoint).
   - Bug B: a vague bug — the symptoms are described but the root cause requires investigation.
   - Bug C: a bug that is hard to reproduce without specific environment/input conditions.
-- [ ] Each bug entry in `BUGS.md` records:
+- [x] Each bug entry in `BUGS.md` records:
   - the affected file path(s)
   - a one-line description
   - whether it's "clear," "vague," or "hard to repro"
-- [ ] The app can be installed and tested locally with a single command documented in `demo_app/README.md`.
+- [x] The app can be installed and tested locally with a single command documented in `demo_app/README.md`.
 
 ### Verification
 - Run the test suite: it passes.

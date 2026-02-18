@@ -1,0 +1,16 @@
+[project]
+name = "cognitiveload"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "respx>=0.22.0",
+]
+
+[tool.uv.workspace]
+members = ["demo_app", "orchestrator"]
