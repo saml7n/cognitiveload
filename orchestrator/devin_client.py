@@ -62,14 +62,8 @@ class DevinClient:
         :param session_id: The ID of the session.
         :param message: The message content to send.
         """
-        # The endpoint for sending a message is /sessions/{session_id}/messages
-        # We need to construct the payload correctly.
-        # Based on docs (though inferred here), usually just a message string or object.
-        # Assuming the API expects {"message": "content"} or similar.
-        # Check docs: POST /v1/sessions/{id}/messages
-        # Body: { "message": "..." } - assumed standard
         payload = {"message": message}
-        resp = requests.post(f"{self.base_url}/sessions/{session_id}/messages", json=payload, headers=self.headers)
+        resp = requests.post(f"{self.base_url}/sessions/{session_id}/message", json=payload, headers=self.headers)
         resp.raise_for_status()
 
     def poll_session(self, session_id: str, timeout: int = 300, interval: int = 5) -> Dict[str, Any]:

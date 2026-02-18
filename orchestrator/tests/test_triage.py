@@ -86,6 +86,24 @@ class TestExtractTriageCard(unittest.TestCase):
         card = _extract_triage_card(session_data)
         self.assertIsNone(card)
 
+    def test_from_conversation_json_embedded_in_prose(self):
+        """Devin often wraps the JSON in explanatory text without fences."""
+        prose = (
+            "Investigating the issue now — I'll look at the codebase "
+            "and get back to you with a triage card.\n\n"
+            + json.dumps(VALID_CARD)
+        )
+        session_data = {
+            "structured_output": None,
+            "conversation": [
+                {"message": "Let me investigate..."},
+                {"message": prose},
+            ],
+        }
+        card = _extract_triage_card(session_data)
+        self.assertIsNotNone(card)
+        self.assertEqual(card["classification"], "bug")
+
 
 # ---------------------------------------------------------------------------
 # _render_comment

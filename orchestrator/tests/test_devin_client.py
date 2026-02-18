@@ -68,7 +68,7 @@ class TestDevinClient(unittest.TestCase):
         self.client.send_message("session_123", "Hello")
 
         mock_post.assert_called_once_with(
-            f"{self.base_url}/sessions/session_123/messages",
+            f"{self.base_url}/sessions/session_123/message",
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
             json={"message": "Hello"}
         )

@@ -108,6 +108,17 @@ def _extract_triage_card(session_data: dict[str, Any]) -> dict[str, Any] | None:
             if isinstance(candidate, dict) and validate_triage_card(candidate):
                 return candidate
         except (json.JSONDecodeError, IndexError, KeyError):
+            pass
+
+        # Fallback: JSON object may be embedded in prose text.
+        # Find the outermost { ... } that parses as valid JSON.
+        try:
+            start = text.index("{")
+            end = text.rindex("}") + 1
+            candidate = json.loads(text[start:end])
+            if isinstance(candidate, dict) and validate_triage_card(candidate):
+                return candidate
+        except (ValueError, json.JSONDecodeError):
             continue
 
     return None
