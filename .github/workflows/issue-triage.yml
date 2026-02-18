@@ -1,0 +1,46 @@
+name: Issue Triage (Devin)
+
+on:
+  issues:
+    types: [opened, labeled]           # Auto-triage new issues + label-triggered backlog triage
+
+permissions:
+  issues: write          # Post comments, add labels
+  contents: read         # Checkout the repo
+
+jobs:
+  triage:
+    name: Triage Issue with Devin
+    runs-on: ubuntu-latest
+
+    # Run on:
+    # 1. Every newly opened issue, OR
+    # 2. When the "devin:triage" label is added to an existing issue
+    if: >-
+      github.event.action == 'opened' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'devin:triage')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install requests jsonschema pydantic python-dotenv
+
+      - name: Run triage orchestrator
+        env:
+          DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          PYTHONPATH=. python -m orchestrator.triage

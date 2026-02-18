@@ -204,17 +204,17 @@ As an **engineer filing an issue**, I want the system to **ask targeted clarifyi
 This is the first story where all the pieces come together into a running GitHub Action.
 
 ### Acceptance criteria
-- [ ] A GitHub Actions workflow exists at `.github/workflows/issue-triage.yml` that triggers on the agreed event (from Story 0 decisions).
-- [ ] When triggered, the workflow:
+- [x] A GitHub Actions workflow exists at `.github/workflows/issue-triage.yml` that triggers on the agreed event (from Story 0 decisions).
+- [x] When triggered, the workflow:
   1. Calls the orchestrator entrypoint with the issue payload.
   2. The orchestrator starts a Devin session with a triage prompt.
   3. Devin's output is validated against the triage card schema (Story 2).
   4. The orchestrator posts/updates exactly one comment on the issue using the bot marker (Story 4).
   5. The orchestrator applies suggested labels (Story 4).
-- [ ] If the issue is unclear, the comment contains targeted questions and the label `needs-info` is applied.
-- [ ] If the issue is clear, the comment contains a full triage card and the label `devin:triaged` is applied.
-- [ ] Rerunning the workflow on the same issue updates the existing comment (no new comment created).
-- [ ] The workflow does not close issues, push code, or create PRs.
+- [x] If the issue is unclear, the comment contains targeted questions and the label `needs-info` is applied.
+- [x] If the issue is clear, the comment contains a full triage card and the label `devin:triaged` is applied.
+- [x] Rerunning the workflow on the same issue updates the existing comment (no new comment created).
+- [x] The workflow does not close issues, push code, or create PRs.
 
 ### Verification
 - Open a test issue in the demo repo → workflow runs → triage comment appears.
@@ -227,9 +227,9 @@ This is the first story where all the pieces come together into a running GitHub
 3. Confirm the required labels exist in the repo.
 
 **Recorded answers:**
-- Trigger mechanism confirmed: _unanswered_
-- API key secret added: _unanswered_
-- Labels created: _unanswered_
+- Trigger mechanism confirmed: Both — `issues: [opened]` for auto-triage + `issues: [labeled]` with `devin:triage` for backlog.
+- API key secret added: User to add `DEVIN_API_KEY` as a GitHub Actions secret. `GITHUB_TOKEN` provided automatically.
+- Labels created: `devin:triaged`, `needs-info`, `devin:triage` — all created in the repo.
 
 ---
 
