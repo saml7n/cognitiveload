@@ -1,0 +1,10 @@
+{
+  "schema_version": "v1",
+  "classification": "bug",
+  "confidence": 0.95,
+  "summary": "Small off-by-one in entry count in /summary endpoint.",
+  "questions": [],
+  "affected_paths": ["demo_app/services/stats_service.py"],
+  "suggested_labels": ["bug", "priority-medium"],
+  "suggested_priority": "medium"
+}

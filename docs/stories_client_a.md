@@ -95,7 +95,7 @@ As a **junior engineer on triage rotation**, I want **a consistent, scannable fo
 This story produces design artifacts only — no running bot, no workflows.
 
 ### Acceptance criteria
-- [ ] A JSON schema file exists at `orchestrator/schemas/triage_card.schema.json` defining the triage card structure with at minimum:
+- [x] A JSON schema file exists at `orchestrator/schemas/triage_card.schema.json` defining the triage card structure with at minimum:
   - `schema_version` (string)
   - `classification` (enum: bug / feature-request / question / unclear)
   - `confidence` (number 0–1)
@@ -104,14 +104,14 @@ This story produces design artifacts only — no running bot, no workflows.
   - `affected_paths` (array of strings — file/folder paths in the repo)
   - `suggested_labels` (array of strings)
   - `suggested_priority` (enum: low / medium / high / critical)
-- [ ] A sample valid triage card JSON exists at `orchestrator/schemas/examples/valid_triage.json`.
-- [ ] A sample invalid triage card JSON exists at `orchestrator/schemas/examples/invalid_triage.json`.
-- [ ] A bot comment template exists at `orchestrator/templates/triage_comment.md` showing what the GitHub comment will look like, including:
+- [x] A sample valid triage card JSON exists at `orchestrator/schemas/examples/valid_triage.json`.
+- [x] A sample invalid triage card JSON exists at `orchestrator/schemas/examples/invalid_triage.json`.
+- [x] A bot comment template exists at `orchestrator/templates/triage_comment.md` showing what the GitHub comment will look like, including:
   - a human-readable summary section
   - a stable HTML comment marker (e.g., `<!-- devin-triage:v1 -->`) for idempotent updates
   - the embedded JSON block
-- [ ] A Python validation function exists at `orchestrator/validation.py` that takes a dict and returns True/False against the schema.
-- [ ] Unit tests exist for the validation function (1 valid case, 1 invalid case, 1 edge case).
+- [x] A Python validation function exists at `orchestrator/validation.py` that takes a dict and returns True/False against the schema.
+- [x] Unit tests exist for the validation function (1 valid case, 1 invalid case, 1 edge case).
 
 ### Verification
 - `pytest orchestrator/tests/test_validation.py` passes.
@@ -122,9 +122,9 @@ This story produces design artifacts only — no running bot, no workflows.
 3. Do you want "effort estimate" as a field, or keep it simple (classification + priority + paths)?
 
 **Recorded answers:**
-- Affected paths format: _unanswered_
-- Comment update behavior: _unanswered_
-- Effort estimate field: _unanswered_
+- Affected paths format: Exact file paths or folder prefixes (best for matching).
+- Comment update behavior: Edit-in-place (recommended for idempotency).
+- Effort estimate field: Keep it simple (PoC only).
 
 ---
 
