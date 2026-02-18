@@ -1,7 +1,26 @@
+import logging
 import requests
 import time
 import os
 from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
+
+def _request_with_retry(fn, *args, max_retries: int = 3, **kwargs):
+    """Call fn(*args, **kwargs); retry on 429 with exponential backoff."""
+    delay = 30  # start with 30s — Devin rate limits are per-minute
+    for attempt in range(max_retries):
+        resp = fn(*args, **kwargs)
+        if resp.status_code != 429:
+            return resp
+        retry_after = int(resp.headers.get("Retry-After", delay))
+        logger.warning(
+            "Devin API rate limited (429). Waiting %ds before retry %d/%d.",
+            retry_after, attempt + 1, max_retries,
+        )
+        time.sleep(retry_after)
+        delay *= 2
+    return resp  # return final response; caller will raise_for_status
 
 class DevinClient:
     def __init__(self, api_key: Optional[str] = None, base_url: str = "https://api.devin.ai/v1"):
@@ -36,13 +55,15 @@ class DevinClient:
             payload["snapshot_id"] = snapshot_id
 
         try:
-            resp = requests.post(f"{self.base_url}/sessions", json=payload, headers=self.headers)
+            resp = _request_with_retry(
+                requests.post, f"{self.base_url}/sessions",
+                json=payload, headers=self.headers,
+            )
             resp.raise_for_status()
             data = resp.json()
             return data["session_id"]
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401:
-                # Provide a more specific error for authentication failure
                 raise ValueError("Invalid Devin API Key") from e
             raise
 
@@ -63,7 +84,10 @@ class DevinClient:
         :param message: The message content to send.
         """
         payload = {"message": message}
-        resp = requests.post(f"{self.base_url}/sessions/{session_id}/message", json=payload, headers=self.headers)
+        resp = _request_with_retry(
+            requests.post, f"{self.base_url}/sessions/{session_id}/message",
+            json=payload, headers=self.headers,
+        )
         resp.raise_for_status()
 
     def poll_session(self, session_id: str, timeout: int = 300, interval: int = 5) -> Dict[str, Any]:
