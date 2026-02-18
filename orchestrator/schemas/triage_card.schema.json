@@ -16,14 +16,14 @@
     },
     "summary": {
       "type": "string",
-      "maxLength": 500
+      "maxLength": 1000
     },
     "questions": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "maxItems": 4
+      "maxItems": 5
     },
     "affected_paths": {
       "type": "array",

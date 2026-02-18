@@ -71,7 +71,7 @@ Field notes:
 - `schema_version`: always `"v1"`.
 - `classification`: one of `bug`, `feature-request`, `question`, `unclear`.
 - `confidence`: 0.0 – 1.0, your confidence in the classification.
-- `summary`: ≤ 500 chars, human-readable.
+- `summary`: ≤ 1000 chars, human-readable.
 - `questions`: list of strings (empty if the issue is clear).
 - `affected_paths`: file paths or folder prefixes in the repo.
 - `suggested_labels`: GitHub labels to apply (e.g. `["bug", "priority-high"]`).

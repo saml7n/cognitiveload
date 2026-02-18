@@ -32,10 +32,10 @@ def test_edge_case_max_summary():
         "schema_version": "v1",
         "classification": "bug",
         "confidence": 1.0,
-        "summary": "A" * 500  # maxLength is 500
+        "summary": "A" * 1000  # maxLength is 1000
     }
     assert validate_triage_card(valid_card) is True
-    
+
     invalid_card = valid_card.copy()
-    invalid_card["summary"] = "A" * 501
+    invalid_card["summary"] = "A" * 1001
     assert validate_triage_card(invalid_card) is False
