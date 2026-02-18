@@ -157,11 +157,43 @@ def triage_issue(
     status = session_data.get("status_enum", session_data.get("status"))
     logger.info("Devin session ended with status: %s", status)
 
+    # Handle 'blocked' — Devin is asking for human input / confirmation.
+    # Send a nudge telling it to proceed autonomously, then re-poll.
+    MAX_UNBLOCK_ATTEMPTS = 2
+    unblock_count = 0
+    while status == "blocked" and unblock_count < MAX_UNBLOCK_ATTEMPTS:
+        unblock_count += 1
+        logger.info(
+            "Devin is blocked (attempt %d/%d). Sending nudge.",
+            unblock_count,
+            MAX_UNBLOCK_ATTEMPTS,
+        )
+        devin.send_message(
+            session_id,
+            (
+                "Do not wait for my input. You are running in fully autonomous "
+                "mode. Proceed with your best judgement and return the JSON "
+                "triage card as described in the original prompt. If anything "
+                "is unclear, set classification to 'unclear' and put your "
+                "questions in the questions array — but still return the JSON."
+            ),
+        )
+        session_data = devin.poll_session(session_id, timeout=devin_timeout)
+        status = session_data.get("status_enum", session_data.get("status"))
+        logger.info("Devin session status after nudge: %s", status)
+
     # --- 3. Extract & validate --------------------------------------------
     card = _extract_triage_card(session_data)
 
     if card is None:
         logger.warning("Could not extract a valid triage card from Devin output.")
+        # Log Devin conversation for diagnostics
+        conversation = session_data.get("conversation", [])
+        logger.info("Session had %d conversation messages.", len(conversation))
+        for i, msg in enumerate(conversation[-5:]):  # last 5 messages
+            role = msg.get("role", "?") if isinstance(msg, dict) else "?"
+            text = msg.get("message", "")[:300] if isinstance(msg, dict) else str(msg)[:300]
+            logger.info("  [%d] %s: %s", i, role, text)
         # Post a fallback comment so the issue isn't silently ignored.
         fallback_body = (
             "## 🤖 Devin Triage Intelligence\n\n"

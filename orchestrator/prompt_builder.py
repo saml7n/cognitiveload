@@ -43,13 +43,18 @@ You are triaging a GitHub issue for the repository **{repo}**.
 
 ## Your task
 
+IMPORTANT: You are running in **fully autonomous mode**. Do NOT ask for
+clarification or confirmation. Do NOT pause and wait for human input.
+Complete the entire task and return the JSON result in a single pass.
+
 1. Read the issue carefully.
-2. Clone the repository (if not already available) and investigate the codebase
-   to understand which files are likely affected.
+2. Clone the repository (you have access via the Devin GitHub App) and
+   investigate the codebase to understand which files are likely affected.
 3. Decide whether this is a **bug**, **feature-request**, **question**, or
    **unclear**.
 4. If the issue is unclear or missing key information, list up to 4 targeted
-   clarifying questions in the `questions` array.
+   clarifying questions in the `questions` array — but still return the
+   full JSON card. Do NOT ask ME for clarification.
 5. If the issue is clear, provide a concise summary, affected file paths,
    suggested labels, and a priority.
 
