@@ -16,6 +16,11 @@ def _load_schema() -> dict:
         return json.load(f)
 
 
+def get_triage_schema() -> dict:
+    """Return the triage card JSON Schema (for structured_output_schema param)."""
+    return _load_schema()
+
+
 def build_triage_prompt(
     *,
     repo: str,

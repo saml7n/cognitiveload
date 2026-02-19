@@ -269,3 +269,33 @@ class TestTriageIssue(unittest.TestCase):
         from orchestrator.github_client import DEFAULT_MARKER
         marker_arg = gh_instance.upsert_comment.call_args[0][2]
         self.assertEqual(marker_arg, DEFAULT_MARKER)
+
+    @patch("orchestrator.triage.GitHubClient")
+    @patch("orchestrator.triage.DevinClient")
+    def test_triage_passes_structured_output_schema(self, MockDevin, MockGH):
+        """create_session must receive the triage card JSON Schema."""
+        devin_instance = MockDevin.return_value
+        devin_instance.create_session.return_value = "sess-schema"
+        devin_instance.poll_session.return_value = {
+            "status_enum": "finished",
+            "structured_output": VALID_CARD,
+            "messages": [],
+        }
+        MockGH.return_value  # not inspected here
+
+        triage_issue(
+            repo="owner/repo",
+            issue_number=14,
+            issue_title="Schema test",
+            issue_body="Body",
+        )
+
+        call_kwargs = devin_instance.create_session.call_args
+        # structured_output_schema should be a dict with JSON Schema keys
+        schema = call_kwargs[1].get("structured_output_schema") if call_kwargs[1] else None
+        if schema is None:
+            # May be passed as keyword via kwargs
+            schema = call_kwargs.kwargs.get("structured_output_schema")
+        self.assertIsNotNone(schema, "structured_output_schema not passed to create_session")
+        self.assertEqual(schema.get("title"), "TriageCard")
+        self.assertIn("classification", schema.get("properties", {}))

@@ -13,7 +13,7 @@ from typing import Any
 
 from orchestrator.devin_client import DevinClient
 from orchestrator.github_client import GitHubClient, DEFAULT_MARKER
-from orchestrator.prompt_builder import build_triage_prompt
+from orchestrator.prompt_builder import build_triage_prompt, get_triage_schema
 from orchestrator.validation import validate_triage_card
 
 logger = logging.getLogger(__name__)
@@ -163,7 +163,11 @@ def triage_issue(
     logger.info("Prompt built (%d chars).", len(prompt))
 
     # --- 2. Devin session -------------------------------------------------
-    session_id = devin.create_session(prompt)
+    schema = get_triage_schema()
+    session_id = devin.create_session(
+        prompt,
+        structured_output_schema=schema,
+    )
     logger.info("Devin session started: %s", session_id)
 
     session_data = devin.poll_session(session_id, timeout=devin_timeout)
