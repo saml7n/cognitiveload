@@ -26,21 +26,6 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 _TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "triage_comment.md")
 
 
-def _is_fixable(card: dict[str, Any]) -> bool:
-    """Return True if the triage card qualifies for the auto-fix checkbox.
-
-    Criteria:
-    - Classification is 'bug' (not unclear, question, or feature-request).
-    - No outstanding clarification questions.
-    - Confidence >= 0.7.
-    """
-    return (
-        card.get("classification") == "bug"
-        and not card.get("questions")
-        and (card.get("confidence", 0) >= 0.7)
-    )
-
-
 def _render_comment(card: dict[str, Any]) -> str:
     """Render a triage card dict into a Markdown comment body.
 
@@ -81,12 +66,6 @@ def _render_comment(card: dict[str, Any]) -> str:
         lines.append("### 📂 Likely Affected Paths")
         for p in affected_paths:
             lines.append(f"- `{p}`")
-
-    # --- Auto-fix checkbox (only for actionable bugs) ---
-    if _is_fixable(card):
-        lines.append("")
-        lines.append("### 🔧 Auto-fix")
-        lines.append("- [ ] Attempt auto-fix with Devin")
 
     lines.append("")
     lines.append("---")

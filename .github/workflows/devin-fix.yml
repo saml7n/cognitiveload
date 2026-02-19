@@ -5,9 +5,9 @@ on:
     types: [edited]
 
 permissions:
-  issues: write          # Update comments, add labels
-  contents: write        # Devin creates branches (via its GitHub App, but we need this for checkout)
-  pull-requests: write   # Devin opens PRs
+  issues: write          # Update comments, add labels on the issue
+  contents: write        # Devin creates branches
+  pull-requests: write   # Devin opens PRs, we update nudge comment
   actions: read          # Read workflow status
 
 jobs:
@@ -16,12 +16,14 @@ jobs:
     runs-on: ubuntu-latest
 
     # Only run when:
-    # 1. The edited comment contains the triage marker (it's a bot triage comment).
-    # 2. The auto-fix checkbox was ticked in this edit.
+    # 1. The comment is on a pull request (has pull_request key).
+    # 2. The edited comment contains the PR nudge marker.
+    # 3. An auto-fix checkbox was newly ticked.
     if: >-
-      contains(github.event.comment.body, '<!-- devin-triage:v1') &&
-      contains(github.event.comment.body, '- [x] Attempt auto-fix with Devin') &&
-      !contains(github.event.changes.body.from, '- [x] Attempt auto-fix with Devin')
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '<!-- devin-pr-nudge:v1') &&
+      contains(github.event.comment.body, '- [x] **Attempt auto-fix for #') &&
+      !contains(github.event.changes.body.from, '- [x] **Attempt auto-fix for #')
 
     steps:
       - name: Checkout repository
@@ -37,32 +39,13 @@ jobs:
           pip install --upgrade pip
           pip install requests jsonschema pydantic python-dotenv
 
-      - name: Verify issue has devin:triaged label
-        id: check-label
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          LABELS=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/labels" \
-            | python3 -c "import sys,json; print(','.join(l['name'] for l in json.load(sys.stdin)))")
-          echo "labels=$LABELS" >> "$GITHUB_OUTPUT"
-          if echo "$LABELS" | grep -q "devin:triaged"; then
-            echo "has_label=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_label=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Issue does not have devin:triaged label — skipping fix."
-          fi
-
       - name: Run fix orchestrator
-        if: steps.check-label.outputs.has_label == 'true'
         env:
           DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
+          PR_NUMBER: ${{ github.event.issue.number }}
           COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_BODY_PREVIOUS: ${{ github.event.changes.body.from }}
         run: |
           PYTHONPATH=. python -m orchestrator.devin_fix

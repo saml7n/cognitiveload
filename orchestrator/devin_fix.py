@@ -1,8 +1,8 @@
 """
 Orchestrator entrypoint — Devin auto-fix workflow.
 
-Triggered when a user ticks the "Attempt auto-fix with Devin" checkbox on a
-triage comment.  Starts a Devin session to reproduce, fix, and PR the issue.
+Triggered when a user ticks an "Attempt auto-fix for #N" checkbox on a
+PR nudge comment.  Starts a Devin session to reproduce, fix, and PR the issue.
 """
 
 import json
@@ -15,16 +15,22 @@ from typing import Any
 from orchestrator.devin_client import DevinClient
 from orchestrator.github_client import GitHubClient, DEFAULT_MARKER
 from orchestrator.fix_prompt_builder import build_fix_prompt
+from orchestrator.pr_nudge import PR_NUDGE_MARKER
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 
-# Labels applied by the fix workflow.
+# Labels applied by the fix workflow (on the *issue*, not the PR).
 LABEL_FIX_ATTEMPTED = "devin:fix-attempted"
 LABEL_FIX_FAILED = "devin:fix-failed"
 
 # Timeout for the fix session (longer than triage — fixes take more time).
 FIX_SESSION_TIMEOUT = 1200  # 20 minutes
+
+# Regex to find ticked auto-fix checkboxes and extract issue numbers.
+_CHECKBOX_TICKED_RE = re.compile(
+    r"- \[x\] \*\*Attempt auto-fix for #(\d+)\*\* with Devin"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -32,26 +38,26 @@ FIX_SESSION_TIMEOUT = 1200  # 20 minutes
 # ---------------------------------------------------------------------------
 
 
-def checkbox_was_ticked(old_body: str, new_body: str) -> bool:
-    """Return True if the auto-fix checkbox changed from unchecked to checked.
+def detect_ticked_issues(old_body: str, new_body: str) -> list[int]:
+    """Return issue numbers whose auto-fix checkbox was newly ticked.
 
-    Looks for the transition:
-      - [ ] Attempt auto-fix with Devin  →  - [x] Attempt auto-fix with Devin
+    Compares old_body vs new_body of the nudge comment to find checkboxes
+    that changed from ``[ ]`` to ``[x]``.
     """
-    unchecked = "- [ ] Attempt auto-fix with Devin"
-    checked = "- [x] Attempt auto-fix with Devin"
-    return unchecked in old_body and checked in new_body
+    previously_ticked = {int(m) for m in _CHECKBOX_TICKED_RE.findall(old_body)}
+    now_ticked = {int(m) for m in _CHECKBOX_TICKED_RE.findall(new_body)}
+    return sorted(now_ticked - previously_ticked)
 
 
 # ---------------------------------------------------------------------------
-# Triage card extraction (from comment body)
+# Triage card extraction (from the *issue's* triage comment)
 # ---------------------------------------------------------------------------
 
 
 def extract_card_from_comment(body: str) -> dict[str, Any] | None:
     """Extract the triage card JSON embedded in an HTML comment.
 
-    Looks for: <!-- devin-triage:v1\n{...json...}\n-->
+    Looks for: ``<!-- devin-triage:v1\\n{...json...}\\n-->``
     """
     pattern = r"<!--\s*devin-triage:v1\s*\n(.*?)\n\s*-->"
     match = re.search(pattern, body, re.DOTALL)
@@ -61,6 +67,18 @@ def extract_card_from_comment(body: str) -> dict[str, Any] | None:
         return json.loads(match.group(1).strip())
     except (json.JSONDecodeError, ValueError):
         return None
+
+
+def fetch_triage_card(
+    gh: GitHubClient, repo: str, issue_number: int
+) -> dict[str, Any] | None:
+    """Fetch the triage card from the bot comment on the given issue."""
+    comments = gh.get_issue_comments(repo, issue_number)
+    for c in comments:
+        body = c.get("body", "")
+        if DEFAULT_MARKER in body:
+            return extract_card_from_comment(body)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -90,18 +108,18 @@ def _find_fix_pr(gh: GitHubClient, repo: str, issue_number: int) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _render_success_section(pr_url: str) -> str:
+def _render_success_section(issue_number: int, pr_url: str) -> str:
     return (
-        "\n\n### ✅ Auto-fix attempted\n"
+        f"\n\n### ✅ Auto-fix for #{issue_number}\n"
         f"Devin opened a PR with a proposed fix: **{pr_url}**\n\n"
         "Please review the PR, verify the reproduction test, and merge if satisfied."
     )
 
 
-def _render_failure_section(session_data: dict[str, Any]) -> str:
+def _render_failure_section(issue_number: int, session_data: dict[str, Any]) -> str:
     """Build a failure section with pointers from Devin's messages."""
     lines = [
-        "\n\n### ❌ Auto-fix failed",
+        f"\n\n### ❌ Auto-fix failed for #{issue_number}",
         "",
         "Devin attempted to fix this issue but was unable to complete the fix.",
         "",
@@ -126,7 +144,7 @@ def _render_failure_section(session_data: dict[str, Any]) -> str:
             lines.append("")
 
     lines.append("**Suggested next steps for manual investigation:**")
-    lines.append("- Review the affected files listed in the triage card above.")
+    lines.append("- Review the affected files listed in the triage card on the issue.")
     lines.append("- Try to reproduce the bug locally with the steps in the issue.")
     lines.append("- Check if Devin created a partial branch that may contain useful work.")
     lines.append("")
@@ -134,23 +152,20 @@ def _render_failure_section(session_data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _update_comment_with_result(
+def _update_nudge_comment_with_result(
     gh: GitHubClient,
     repo: str,
-    issue_number: int,
+    pr_number: int,
     comment_body: str,
+    issue_number: int,
     result_section: str,
 ) -> None:
-    """Append the result section to the existing triage comment."""
-    # Remove any previous fix result section (idempotent re-run).
-    body = re.sub(
-        r"\n\n### [✅❌] Auto-fix.*",
-        "",
-        comment_body,
-        flags=re.DOTALL,
-    )
+    """Append the result section to the existing nudge comment on the PR."""
+    # Remove any previous fix result for THIS issue (idempotent re-run).
+    pattern = rf"\n\n### [✅❌] Auto-fix[^\n]*for #{issue_number}.*?(?=\n\n### |$)"
+    body = re.sub(pattern, "", comment_body, flags=re.DOTALL)
     updated_body = body + result_section
-    gh.upsert_comment(repo, issue_number, DEFAULT_MARKER, updated_body)
+    gh.upsert_comment(repo, pr_number, PR_NUDGE_MARKER, updated_body)
 
 
 # ---------------------------------------------------------------------------
@@ -161,32 +176,43 @@ def _update_comment_with_result(
 def attempt_fix(
     *,
     repo: str,
+    pr_number: int,
     issue_number: int,
-    issue_title: str,
-    issue_body: str,
     comment_body: str,
     fix_timeout: int = FIX_SESSION_TIMEOUT,
 ) -> None:
-    """End-to-end auto-fix flow for a triaged issue.
+    """End-to-end auto-fix flow for a single issue, triggered from a PR nudge.
 
-    1. Extract triage card from the comment.
-    2. Build fix prompt.
-    3. Start Devin session + poll to completion.
-    4. Check whether Devin opened a PR.
-    5. Update the triage comment with success/failure.
-    6. Apply labels.
+    1. Fetch triage card from the issue's triage comment.
+    2. Fetch issue details from the GitHub API.
+    3. Build fix prompt.
+    4. Start Devin session + poll to completion.
+    5. Check whether Devin opened a PR.
+    6. Update the nudge comment on the PR with success/failure.
+    7. Apply labels on the issue.
     """
-    logger.info("Attempting auto-fix for %s#%d — %s", repo, issue_number, issue_title)
+    logger.info(
+        "Attempting auto-fix for %s#%d (from PR #%d)",
+        repo, issue_number, pr_number,
+    )
 
     # --- Clients ----------------------------------------------------------
     devin = DevinClient()
     gh = GitHubClient()
 
-    # --- 1. Extract triage card -------------------------------------------
-    card = extract_card_from_comment(comment_body)
+    # --- 1. Fetch triage card from the issue ------------------------------
+    card = fetch_triage_card(gh, repo, issue_number)
     if card is None:
-        logger.error("No triage card found in comment — aborting fix.")
+        logger.error("No triage card found on issue #%d — aborting fix.", issue_number)
         return
+
+    # --- 2. Fetch issue details -------------------------------------------
+    issue_url = f"{gh.base_url}/repos/{repo}/issues/{issue_number}"
+    resp = gh._session.get(issue_url)
+    resp.raise_for_status()
+    issue_data = resp.json()
+    issue_title = issue_data.get("title", "")
+    issue_body = issue_data.get("body", "")
 
     # --- 2. Build prompt --------------------------------------------------
     prompt = build_fix_prompt(
@@ -232,19 +258,23 @@ def attempt_fix(
     # --- 4. Check for PR --------------------------------------------------
     pr_url = _find_fix_pr(gh, repo, issue_number)
 
-    # --- 5. Update comment ------------------------------------------------
+    # --- 5. Update nudge comment on the PR --------------------------------
     if pr_url:
         logger.info("Devin opened PR: %s", pr_url)
-        result_section = _render_success_section(pr_url)
-        _update_comment_with_result(gh, repo, issue_number, comment_body, result_section)
+        result_section = _render_success_section(issue_number, pr_url)
+        _update_nudge_comment_with_result(
+            gh, repo, pr_number, comment_body, issue_number, result_section,
+        )
         gh.add_labels(repo, issue_number, [LABEL_FIX_ATTEMPTED])
     else:
         logger.warning("No PR found — fix likely failed.")
-        result_section = _render_failure_section(session_data)
-        _update_comment_with_result(gh, repo, issue_number, comment_body, result_section)
+        result_section = _render_failure_section(issue_number, session_data)
+        _update_nudge_comment_with_result(
+            gh, repo, pr_number, comment_body, issue_number, result_section,
+        )
         gh.add_labels(repo, issue_number, [LABEL_FIX_FAILED])
 
-    logger.info("Auto-fix flow complete for %s#%d.", repo, issue_number)
+    logger.info("Auto-fix flow complete for issue #%d.", issue_number)
 
 
 # ---------------------------------------------------------------------------
@@ -253,36 +283,49 @@ def attempt_fix(
 
 
 def main() -> None:
-    """Parse environment variables (set by the GitHub Actions workflow) and run."""
-    repo = os.environ.get("GITHUB_REPOSITORY", "")
-    issue_number_str = os.environ.get("ISSUE_NUMBER", "")
-    issue_title = os.environ.get("ISSUE_TITLE", "")
-    issue_body = os.environ.get("ISSUE_BODY", "")
-    comment_body = os.environ.get("COMMENT_BODY", "")
+    """Parse environment variables (set by the GitHub Actions workflow) and run.
 
-    if not repo or not issue_number_str:
+    The workflow passes:
+    - GITHUB_REPOSITORY, PR_NUMBER
+    - COMMENT_BODY  (current nudge comment body, after edit)
+    - COMMENT_BODY_PREVIOUS  (nudge comment body before the edit)
+    """
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    pr_number_str = os.environ.get("PR_NUMBER", "")
+    comment_body = os.environ.get("COMMENT_BODY", "")
+    comment_body_previous = os.environ.get("COMMENT_BODY_PREVIOUS", "")
+
+    if not repo or not pr_number_str:
         print(
-            "Error: GITHUB_REPOSITORY and ISSUE_NUMBER must be set.",
+            "Error: GITHUB_REPOSITORY and PR_NUMBER must be set.",
             file=sys.stderr,
         )
         sys.exit(1)
 
     try:
-        issue_number = int(issue_number_str)
+        pr_number = int(pr_number_str)
     except ValueError:
         print(
-            f"Error: ISSUE_NUMBER must be an integer, got '{issue_number_str}'.",
+            f"Error: PR_NUMBER must be an integer, got '{pr_number_str}'.",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    attempt_fix(
-        repo=repo,
-        issue_number=issue_number,
-        issue_title=issue_title,
-        issue_body=issue_body,
-        comment_body=comment_body,
-    )
+    # Detect which issue checkboxes were newly ticked.
+    ticked_issues = detect_ticked_issues(comment_body_previous, comment_body)
+    if not ticked_issues:
+        logger.info("No new auto-fix checkboxes ticked — nothing to do.")
+        return
+
+    logger.info("Auto-fix requested for issue(s): %s", ticked_issues)
+
+    for issue_number in ticked_issues:
+        attempt_fix(
+            repo=repo,
+            pr_number=pr_number,
+            issue_number=issue_number,
+            comment_body=comment_body,
+        )
 
 
 if __name__ == "__main__":

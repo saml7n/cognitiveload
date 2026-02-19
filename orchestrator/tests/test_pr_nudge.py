@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 from orchestrator.pr_nudge import (
     PR_NUDGE_MARKER,
     MAX_MATCHES,
+    is_fixable,
     _extract_card_from_comment,
     _match_paths,
     _render_nudge_comment,
@@ -124,6 +125,7 @@ class TestRenderNudgeComment(unittest.TestCase):
             "confidence": 0.95,
             "summary": "Off-by-one error.",
             "matched_files": ["demo_app/services/stats_service.py"],
+            "fixable": False,
         }
         base.update(overrides)
         return base
@@ -156,6 +158,63 @@ class TestRenderNudgeComment(unittest.TestCase):
     def test_marker_present(self):
         body = _render_nudge_comment([self._make_match()])
         self.assertIn(PR_NUDGE_MARKER, body)
+
+    def test_fixable_match_shows_checkbox(self):
+        body = _render_nudge_comment([self._make_match(fixable=True)])
+        self.assertIn("- [ ] **Attempt auto-fix for #1** with Devin", body)
+
+    def test_non_fixable_match_hides_checkbox(self):
+        body = _render_nudge_comment([self._make_match(fixable=False)])
+        self.assertNotIn("Attempt auto-fix", body)
+
+    def test_mixed_fixable_and_not(self):
+        matches = [
+            self._make_match(issue_number=1, fixable=True),
+            self._make_match(issue_number=2, fixable=False),
+            self._make_match(issue_number=3, fixable=True),
+        ]
+        body = _render_nudge_comment(matches)
+        self.assertIn("- [ ] **Attempt auto-fix for #1** with Devin", body)
+        self.assertNotIn("Attempt auto-fix for #2", body)
+        self.assertIn("- [ ] **Attempt auto-fix for #3** with Devin", body)
+
+
+# ---------------------------------------------------------------------------
+# is_fixable gate
+# ---------------------------------------------------------------------------
+
+class TestIsFixable(unittest.TestCase):
+    """is_fixable decides whether a triage card qualifies for the auto-fix checkbox."""
+
+    def _make_card(self, **overrides):
+        base = {
+            "classification": "bug",
+            "confidence": 0.92,
+            "questions": [],
+        }
+        base.update(overrides)
+        return base
+
+    def test_clear_bug_high_confidence(self):
+        self.assertTrue(is_fixable(self._make_card()))
+
+    def test_unclear_not_fixable(self):
+        self.assertFalse(is_fixable(self._make_card(classification="unclear")))
+
+    def test_bug_with_questions_not_fixable(self):
+        self.assertFalse(is_fixable(self._make_card(questions=["Repro steps?"])))
+
+    def test_low_confidence_not_fixable(self):
+        self.assertFalse(is_fixable(self._make_card(confidence=0.69)))
+
+    def test_exactly_0_7_is_fixable(self):
+        self.assertTrue(is_fixable(self._make_card(confidence=0.7)))
+
+    def test_feature_request_not_fixable(self):
+        self.assertFalse(is_fixable(self._make_card(classification="feature-request")))
+
+    def test_question_not_fixable(self):
+        self.assertFalse(is_fixable(self._make_card(classification="question")))
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +373,58 @@ class TestNudgePr(unittest.TestCase):
         body = gh.upsert_comment.call_args[0][3]
         self.assertIn("#2: Stats bug", body)
         self.assertIn("#3: Sorting bug", body)
+
+    @patch("orchestrator.pr_nudge.GitHubClient")
+    def test_fixable_bug_gets_checkbox_in_nudge(self, MockGH):
+        """A high-confidence bug with no questions gets an auto-fix checkbox."""
+        gh = MockGH.return_value
+        gh.get_pr_changed_files.return_value = ["demo_app/services/stats_service.py"]
+        gh.list_issues.return_value = [
+            {"number": 2, "title": "Off-by-one"},
+        ]
+        card = {
+            "classification": "bug",
+            "confidence": 0.95,
+            "summary": "Off by one.",
+            "affected_paths": ["demo_app/services/stats_service.py"],
+            "suggested_priority": "high",
+            "questions": [],
+        }
+        gh.get_issue_comments.return_value = [
+            {"body": self._build_triage_comment(card)},
+        ]
+
+        nudge_pr(repo="owner/repo", pr_number=10)
+
+        gh.upsert_comment.assert_called_once()
+        body = gh.upsert_comment.call_args[0][3]
+        self.assertIn("- [ ] **Attempt auto-fix for #2** with Devin", body)
+
+    @patch("orchestrator.pr_nudge.GitHubClient")
+    def test_unclear_issue_no_checkbox_in_nudge(self, MockGH):
+        """An unclear issue with questions should NOT get an auto-fix checkbox."""
+        gh = MockGH.return_value
+        gh.get_pr_changed_files.return_value = ["demo_app/services/stats_service.py"]
+        gh.list_issues.return_value = [
+            {"number": 3, "title": "Something weird"},
+        ]
+        card = {
+            "classification": "unclear",
+            "confidence": 0.4,
+            "summary": "Vague description.",
+            "affected_paths": ["demo_app/services/stats_service.py"],
+            "suggested_priority": "low",
+            "questions": ["What exactly happened?"],
+        }
+        gh.get_issue_comments.return_value = [
+            {"body": self._build_triage_comment(card)},
+        ]
+
+        nudge_pr(repo="owner/repo", pr_number=10)
+
+        gh.upsert_comment.assert_called_once()
+        body = gh.upsert_comment.call_args[0][3]
+        self.assertNotIn("Attempt auto-fix", body)
 
 
 if __name__ == "__main__":

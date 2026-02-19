@@ -26,6 +26,25 @@ MAX_MATCHES = 5
 
 
 # ---------------------------------------------------------------------------
+# Fixability gate
+# ---------------------------------------------------------------------------
+
+def is_fixable(card: dict[str, Any]) -> bool:
+    """Return True if a triage card qualifies for the auto-fix checkbox.
+
+    Criteria:
+    - Classification is 'bug' (not unclear, question, or feature-request).
+    - No outstanding clarification questions.
+    - Confidence >= 0.7.
+    """
+    return (
+        card.get("classification") == "bug"
+        and not card.get("questions")
+        and (card.get("confidence", 0) >= 0.7)
+    )
+
+
+# ---------------------------------------------------------------------------
 # Card extraction from issue comments
 # ---------------------------------------------------------------------------
 
@@ -75,8 +94,8 @@ def _render_nudge_comment(matches: list[dict[str, Any]]) -> str:
     """Render a list of matched issues into a PR nudge comment.
 
     Each entry in *matches* has:
-      - issue_number, issue_title, classification, priority, summary,
-        matched_files (list[str])
+      - issue_number, issue_title, classification, priority, confidence,
+        summary, matched_files (list[str]), fixable (bool)
     """
     lines: list[str] = []
     lines.append("## 🔔 PR Nudge — Related Triaged Issues")
@@ -103,6 +122,13 @@ def _render_nudge_comment(matches: list[dict[str, Any]]) -> str:
         for f in m["matched_files"]:
             lines.append(f"- `{f}`")
         lines.append("")
+
+        # Auto-fix checkbox — only for qualifying bugs
+        if m.get("fixable"):
+            lines.append(
+                f"- [ ] **Attempt auto-fix for #{m['issue_number']}** with Devin"
+            )
+            lines.append("")
 
     remaining = len(matches) - MAX_MATCHES
     if remaining > 0:
@@ -185,6 +211,7 @@ def nudge_pr(
                     "confidence": card.get("confidence", 0),
                     "summary": card.get("summary", ""),
                     "matched_files": matched_files,
+                    "fixable": is_fixable(card),
                 }
             )
 
