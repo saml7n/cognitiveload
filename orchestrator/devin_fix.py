@@ -213,6 +213,7 @@ def attempt_fix(
     session_id = devin.create_session(
         prompt,
         title=f"Fix: Issue #{issue_number} \u2014 {issue_title[:60]}",
+        tags=["fix", f"issue-{issue_number}", f"pr-{pr_number}"],
     )
     logger.info("Devin fix session started: %s", session_id)
 

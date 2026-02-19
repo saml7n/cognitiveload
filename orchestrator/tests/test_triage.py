@@ -324,3 +324,26 @@ class TestTriageIssue(unittest.TestCase):
         self.assertIn("title", kwargs)
         self.assertIn("Triage:", kwargs["title"])
         self.assertIn("#15", kwargs["title"])
+
+    @patch("orchestrator.triage.GitHubClient")
+    @patch("orchestrator.triage.DevinClient")
+    def test_triage_session_has_tags(self, MockDevin, MockGH):
+        """create_session must receive triage + issue tags."""
+        devin_instance = MockDevin.return_value
+        devin_instance.create_session.return_value = "sess-tags"
+        devin_instance.poll_session.return_value = {
+            "status_enum": "finished",
+            "structured_output": VALID_CARD,
+            "messages": [],
+        }
+        MockGH.return_value
+
+        triage_issue(
+            repo="owner/repo",
+            issue_number=2,
+            issue_title="Some bug",
+            issue_body="Body",
+        )
+
+        kwargs = devin_instance.create_session.call_args.kwargs
+        self.assertEqual(kwargs["tags"], ["triage", "issue-2"])

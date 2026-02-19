@@ -168,6 +168,7 @@ def triage_issue(
         prompt,
         structured_output_schema=schema,
         title=f"Triage: Issue #{issue_number} \u2014 {issue_title[:60]}",
+        tags=["triage", f"issue-{issue_number}"],
     )
     logger.info("Devin session started: %s", session_id)
 
