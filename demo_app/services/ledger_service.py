@@ -14,11 +14,10 @@ def list_entries(sort_by_priority: bool = False) -> List[LedgerEntry]:
     If sort_by_priority is True, entries are sorted by priority (HIGH first).
     Bug B (Vague): Sorting logic is flawed. High priority items are accidentally pushed to the bottom.
     """
+    _priority_order = {Priority.HIGH: 0, Priority.MEDIUM: 1, Priority.LOW: 2}
     results = list(_ledger)
     if sort_by_priority:
-        # Intentionally flawed sort: HIGH should be first, but we reverse it.
-        # priority levels: low, medium, high (alphabetical: h, l, m)
-        results.sort(key=lambda x: x.priority.value, reverse=False) 
+        results.sort(key=lambda x: _priority_order[x.priority])
     return results
 
 def add_entry(entry: LedgerEntry) -> LedgerEntry:
