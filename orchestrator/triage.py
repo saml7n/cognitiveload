@@ -165,6 +165,7 @@ def triage_issue(
         issue_number=issue_number,
         issue_title=issue_title,
         issue_body=issue_body,
+        playbook_active=bool(TRIAGE_PLAYBOOK_ID),
     )
     logger.info("Prompt built (%d chars).", len(prompt))
 

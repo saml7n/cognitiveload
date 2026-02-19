@@ -563,6 +563,49 @@ class TestFixPromptBuilder(unittest.TestCase):
         self.assertIn("pytest", prompt)
         self.assertIn("reproduction test", prompt)
 
+    def test_playbook_active_compact_prompt(self):
+        from orchestrator.fix_prompt_builder import build_fix_prompt
+
+        prompt = build_fix_prompt(
+            repo="owner/repo",
+            issue_number=2,
+            issue_title="Off-by-one",
+            issue_body="Count is wrong.",
+            triage_card=VALID_CARD,
+            playbook_active=True,
+        )
+        # Should still contain issue context and triage card
+        self.assertIn("owner/repo", prompt)
+        self.assertIn("#2", prompt)
+        self.assertIn("Off-by-one", prompt)
+        self.assertIn("devin/fix-issue-2", prompt)
+        # Should NOT contain the full inline steps
+        self.assertNotIn("### Step 2", prompt)
+        self.assertNotIn("pytest", prompt)
+        # Should reference the playbook
+        self.assertIn("playbook", prompt)
+
+    def test_playbook_active_still_shorter(self):
+        from orchestrator.fix_prompt_builder import build_fix_prompt
+
+        compact = build_fix_prompt(
+            repo="owner/repo",
+            issue_number=2,
+            issue_title="Test",
+            issue_body="Body.",
+            triage_card=VALID_CARD,
+            playbook_active=True,
+        )
+        full = build_fix_prompt(
+            repo="owner/repo",
+            issue_number=2,
+            issue_title="Test",
+            issue_body="Body.",
+            triage_card=VALID_CARD,
+            playbook_active=False,
+        )
+        self.assertLess(len(compact), len(full) * 0.7)
+
 
 if __name__ == "__main__":
     unittest.main()

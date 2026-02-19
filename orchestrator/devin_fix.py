@@ -15,7 +15,7 @@ from typing import Any
 from orchestrator.devin_client import DevinClient
 from orchestrator.github_client import GitHubClient, DEFAULT_MARKER
 from orchestrator.fix_prompt_builder import build_fix_prompt
-from orchestrator.pr_nudge import PR_NUDGE_MARKER
+from orchestrator.pr_nudge import PR_NUDGE_MARKER, _normalize_affected_paths
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -205,6 +205,14 @@ def attempt_fix(
     issue_title = issue_data.get("title", "")
     issue_body = issue_data.get("body", "")
 
+    # Normalise affected paths in the card before building the prompt,
+    # so Devin sees repo-relative paths even if the original triage
+    # card contained absolute sandbox paths.
+    if card.get("affected_paths"):
+        card["affected_paths"] = _normalize_affected_paths(
+            card["affected_paths"], repo
+        )
+
     # --- 2. Build prompt --------------------------------------------------
     prompt = build_fix_prompt(
         repo=repo,
@@ -212,6 +220,7 @@ def attempt_fix(
         issue_title=issue_title,
         issue_body=issue_body,
         triage_card=card,
+        playbook_active=bool(FIX_PLAYBOOK_ID),
     )
     logger.info("Fix prompt built (%d chars).", len(prompt))
 

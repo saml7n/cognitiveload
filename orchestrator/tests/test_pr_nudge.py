@@ -15,10 +15,58 @@ from orchestrator.pr_nudge import (
     is_fixable,
     _extract_card_from_comment,
     _match_paths,
+    _normalize_path,
+    _normalize_affected_paths,
     _render_nudge_comment,
     nudge_pr,
 )
 from orchestrator.github_client import DEFAULT_MARKER
+
+
+# ---------------------------------------------------------------------------
+# Path normalisation
+# ---------------------------------------------------------------------------
+
+class TestNormalizePath(unittest.TestCase):
+    """_normalize_path strips absolute sandbox prefixes."""
+
+    def test_already_relative_unchanged(self):
+        self.assertEqual(_normalize_path("demo_app/foo.py"), "demo_app/foo.py")
+
+    def test_strips_devin_sandbox_prefix(self):
+        self.assertEqual(
+            _normalize_path("/home/ubuntu/repos/cognitiveload/demo_app/foo.py", "saml7n/cognitiveload"),
+            "demo_app/foo.py",
+        )
+
+    def test_strips_prefix_without_owner(self):
+        self.assertEqual(
+            _normalize_path("/home/ubuntu/repos/cognitiveload/demo_app/foo.py", "cognitiveload"),
+            "demo_app/foo.py",
+        )
+
+    def test_strips_via_repos_marker_without_repo_name(self):
+        self.assertEqual(
+            _normalize_path("/home/ubuntu/repos/myrepo/src/app.py"),
+            "src/app.py",
+        )
+
+    def test_fallback_strips_leading_slash(self):
+        self.assertEqual(
+            _normalize_path("/some/unknown/path/file.py"),
+            "some/unknown/path/file.py",
+        )
+
+
+class TestNormalizeAffectedPaths(unittest.TestCase):
+
+    def test_normalises_list(self):
+        paths = [
+            "/home/ubuntu/repos/cognitiveload/demo_app/a.py",
+            "demo_app/b.py",
+        ]
+        result = _normalize_affected_paths(paths, "saml7n/cognitiveload")
+        self.assertEqual(result, ["demo_app/a.py", "demo_app/b.py"])
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +155,14 @@ class TestMatchPaths(unittest.TestCase):
     def test_empty_affected_paths(self):
         result = _match_paths(["src/app.py"], [])
         self.assertEqual(result, [])
+
+    def test_absolute_sandbox_paths_normalised(self):
+        """Affected paths from Devin may be absolute — normalise before matching."""
+        pr_files = ["demo_app/services/ledger_service.py"]
+        affected = ["/home/ubuntu/repos/cognitiveload/demo_app/services/ledger_service.py"]
+        # _match_paths now normalises internally
+        result = _match_paths(pr_files, affected)
+        self.assertEqual(result, ["demo_app/services/ledger_service.py"])
 
 
 # ---------------------------------------------------------------------------
@@ -425,6 +481,36 @@ class TestNudgePr(unittest.TestCase):
         gh.upsert_comment.assert_called_once()
         body = gh.upsert_comment.call_args[0][3]
         self.assertNotIn("Attempt auto-fix", body)
+
+    @patch("orchestrator.pr_nudge.GitHubClient")
+    def test_matches_when_card_has_absolute_sandbox_paths(self, MockGH):
+        """The nudge flow should match even when Devin returns absolute sandbox paths."""
+        gh = MockGH.return_value
+        gh.get_pr_changed_files.return_value = ["demo_app/services/ledger_service.py"]
+        gh.list_issues.return_value = [
+            {"number": 7, "title": "Sorting is broken"},
+        ]
+        card = {
+            "classification": "bug",
+            "confidence": 0.9,
+            "summary": "Priority sorting is wrong.",
+            "affected_paths": [
+                "/home/ubuntu/repos/cognitiveload/demo_app/services/ledger_service.py",
+                "/home/ubuntu/repos/cognitiveload/demo_app/models/ledger.py",
+            ],
+            "suggested_priority": "high",
+            "questions": [],
+        }
+        gh.get_issue_comments.return_value = [
+            {"body": self._build_triage_comment(card)},
+        ]
+
+        nudge_pr(repo="saml7n/cognitiveload", pr_number=8)
+
+        gh.upsert_comment.assert_called_once()
+        body = gh.upsert_comment.call_args[0][3]
+        self.assertIn("#7: Sorting is broken", body)
+        self.assertIn("Attempt auto-fix for #7", body)
 
 
 if __name__ == "__main__":

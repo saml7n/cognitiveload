@@ -16,21 +16,20 @@ def build_fix_prompt(
     issue_title: str,
     issue_body: str,
     triage_card: dict[str, Any],
+    playbook_active: bool = False,
 ) -> str:
     """Return the prompt string sent to Devin for an auto-fix attempt.
 
-    The prompt instructs Devin to:
-    1. Understand the bug from the issue + triage card.
-    2. Write a reproduction test.
-    3. Fix the code.
-    4. Verify (repro test + full test suite).
-    5. Create a branch + open a PR.
+    When *playbook_active* is ``True`` the attached Devin playbook already
+    contains the full procedure, so the prompt only supplies context.
+    When ``False`` the prompt includes the full inline procedure.
     """
     card_json = json.dumps(triage_card, indent=2)
     affected = "\n".join(f"- {p}" for p in triage_card.get("affected_paths", []))
     branch_name = f"devin/fix-issue-{issue_number}"
 
-    return f"""\
+    # -- Context header (always present) -----------------------------------
+    header = f"""\
 You are fixing a bug in the repository **{repo}**.
 
 ## Issue #{issue_number}: {issue_title}
@@ -47,7 +46,28 @@ Likely affected files:
 {affected}
 
 ---
+"""
 
+    # -- Compact prompt (playbook handles procedure) -----------------------
+    if playbook_active:
+        return (
+            header
+            + f"""\
+## Context
+
+IMPORTANT: You are running in **fully autonomous mode**. Do NOT ask for
+clarification or confirmation. Do NOT pause and wait for human input.
+
+The attached playbook describes the step-by-step procedure.
+Use branch name `{branch_name}` and reference `Closes #{issue_number}` in
+the PR body.
+"""
+        )
+
+    # -- Full inline prompt (no playbook) ----------------------------------
+    return (
+        header
+        + f"""\
 ## Your task
 
 IMPORTANT: You are running in **fully autonomous mode**. Do NOT ask for
@@ -94,3 +114,4 @@ If any tests fail, adjust your fix until all tests pass.
   and where you got stuck. Do NOT open a PR if the tests fail.
 - Complete everything autonomously. Do not wait for human input at any point.
 """
+    )

@@ -100,9 +100,17 @@ def main() -> None:
 
     # Machine-readable output
     print()
-    print("─── Playbook IDs (add to GitHub Actions secrets) ───")
+    print("─── Playbook IDs ───")
     print(f"TRIAGE_PLAYBOOK_ID={results['triage']}")
     print(f"FIX_PLAYBOOK_ID={results['fix']}")
+
+    # Emit as GitHub Actions step outputs when running in CI.
+    gh_output = os.environ.get("GITHUB_OUTPUT")
+    if gh_output:
+        with open(gh_output, "a") as fh:
+            fh.write(f"triage_playbook_id={results['triage']}\n")
+            fh.write(f"fix_playbook_id={results['fix']}\n")
+        print("\n(Playbook IDs written to $GITHUB_OUTPUT)", file=sys.stderr)
 
 
 if __name__ == "__main__":
