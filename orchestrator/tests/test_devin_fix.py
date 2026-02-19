@@ -355,6 +355,39 @@ class TestAttemptFix(unittest.TestCase):
         labels = gh.add_labels.call_args[0][2]
         self.assertIn(LABEL_FIX_FAILED, labels)
 
+    @patch("orchestrator.devin_fix.GitHubClient")
+    @patch("orchestrator.devin_fix.DevinClient")
+    def test_fix_session_has_title(self, MockDevin, MockGH):
+        """create_session must receive a descriptive title."""
+        devin = MockDevin.return_value
+        devin.create_session.return_value = "sess-title"
+        devin.poll_session.return_value = {
+            "status_enum": "finished",
+            "messages": [],
+            "pull_request": {"url": "https://github.com/owner/repo/pull/99"},
+        }
+
+        gh = MockGH.return_value
+        gh.base_url = "https://api.github.com"
+        gh.get_issue_comments.return_value = [
+            {"body": _make_triage_comment(VALID_CARD)},
+        ]
+        gh._session.get.side_effect = [
+            self._mock_issue_response(title="Off-by-one"),
+        ]
+
+        attempt_fix(
+            repo="owner/repo",
+            pr_number=10,
+            issue_number=2,
+            comment_body=_make_nudge_body(2, ticked={2}),
+        )
+
+        kwargs = devin.create_session.call_args.kwargs
+        self.assertIn("title", kwargs)
+        self.assertIn("Fix:", kwargs["title"])
+        self.assertIn("#2", kwargs["title"])
+
 
 # ---------------------------------------------------------------------------
 # Fix prompt builder

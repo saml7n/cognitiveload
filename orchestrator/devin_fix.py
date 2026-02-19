@@ -210,7 +210,10 @@ def attempt_fix(
     logger.info("Fix prompt built (%d chars).", len(prompt))
 
     # --- 3. Devin session -------------------------------------------------
-    session_id = devin.create_session(prompt)
+    session_id = devin.create_session(
+        prompt,
+        title=f"Fix: Issue #{issue_number} \u2014 {issue_title[:60]}",
+    )
     logger.info("Devin fix session started: %s", session_id)
 
     session_data = devin.poll_session(session_id, timeout=fix_timeout)

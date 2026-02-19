@@ -167,6 +167,7 @@ def triage_issue(
     session_id = devin.create_session(
         prompt,
         structured_output_schema=schema,
+        title=f"Triage: Issue #{issue_number} \u2014 {issue_title[:60]}",
     )
     logger.info("Devin session started: %s", session_id)
 
