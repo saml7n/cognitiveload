@@ -84,23 +84,8 @@ def fetch_triage_card(
 # ---------------------------------------------------------------------------
 # PR detection (did Devin open one?)
 # ---------------------------------------------------------------------------
-
-
-def _find_fix_pr(gh: GitHubClient, repo: str, issue_number: int) -> str | None:
-    """Check whether Devin opened a PR for this issue's fix branch.
-
-    Returns the PR URL if found, else None.
-    """
-    branch_name = f"devin/fix-issue-{issue_number}"
-    url = f"{gh.base_url}/repos/{repo}/pulls"
-    resp = gh._session.get(
-        url, params={"head": f"{repo.split('/')[0]}:{branch_name}", "state": "open"}
-    )
-    resp.raise_for_status()
-    prs = resp.json()
-    if prs:
-        return prs[0].get("html_url", prs[0].get("url"))
-    return None
+# The Devin v1 session response includes a `pull_request: { url }` field
+# when Devin opens a PR.  We read that directly — no GitHub API search needed.
 
 
 # ---------------------------------------------------------------------------
@@ -255,8 +240,8 @@ def attempt_fix(
         status = session_data.get("status_enum", session_data.get("status"))
         logger.info("Devin fix session status after nudge: %s", status)
 
-    # --- 4. Check for PR --------------------------------------------------
-    pr_url = _find_fix_pr(gh, repo, issue_number)
+    # --- 4. Check for PR (native Devin session field) ---------------------
+    pr_url = (session_data.get("pull_request") or {}).get("url")
 
     # --- 5. Update nudge comment on the PR --------------------------------
     if pr_url:

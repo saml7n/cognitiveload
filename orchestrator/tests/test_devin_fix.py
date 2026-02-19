@@ -208,15 +208,6 @@ class TestUpdateNudgeComment(unittest.TestCase):
 class TestAttemptFix(unittest.TestCase):
     """Full flow with mocked Devin and GitHub clients (PR nudge context)."""
 
-    def _mock_pr_response(self, pr_url=None):
-        resp = MagicMock()
-        resp.raise_for_status.return_value = None
-        if pr_url:
-            resp.json.return_value = [{"html_url": pr_url}]
-        else:
-            resp.json.return_value = []
-        return resp
-
     def _mock_issue_response(self, title="Off-by-one", body="Count is wrong."):
         resp = MagicMock()
         resp.raise_for_status.return_value = None
@@ -231,6 +222,7 @@ class TestAttemptFix(unittest.TestCase):
         devin.poll_session.return_value = {
             "status_enum": "finished",
             "messages": [],
+            "pull_request": {"url": "https://github.com/owner/repo/pull/42"},
         }
 
         gh = MockGH.return_value
@@ -240,10 +232,9 @@ class TestAttemptFix(unittest.TestCase):
         gh.get_issue_comments.return_value = [
             {"body": _make_triage_comment(VALID_CARD)},
         ]
-        # Fetch issue details + find fix PR
+        # Fetch issue details (only one call now — no PR search)
         gh._session.get.side_effect = [
             self._mock_issue_response(),
-            self._mock_pr_response("https://github.com/owner/repo/pull/42"),
         ]
 
         comment_body = _make_nudge_body(2, ticked={2})
@@ -284,9 +275,9 @@ class TestAttemptFix(unittest.TestCase):
         gh.get_issue_comments.return_value = [
             {"body": _make_triage_comment(VALID_CARD)},
         ]
+        # Only issue fetch — no PR search needed
         gh._session.get.side_effect = [
             self._mock_issue_response(),
-            self._mock_pr_response(None),  # No PR found
         ]
 
         comment_body = _make_nudge_body(2, ticked={2})
@@ -326,6 +317,43 @@ class TestAttemptFix(unittest.TestCase):
 
         # Devin should never be called
         MockDevin.return_value.create_session.assert_not_called()
+
+    @patch("orchestrator.devin_fix.GitHubClient")
+    @patch("orchestrator.devin_fix.DevinClient")
+    def test_failure_when_pull_request_is_null(self, MockDevin, MockGH):
+        """When session_data has pull_request: None, treat as failure."""
+        devin = MockDevin.return_value
+        devin.create_session.return_value = "sess-fix-3"
+        devin.poll_session.return_value = {
+            "status_enum": "finished",
+            "messages": [],
+            "pull_request": None,
+        }
+
+        gh = MockGH.return_value
+        gh.base_url = "https://api.github.com"
+
+        gh.get_issue_comments.return_value = [
+            {"body": _make_triage_comment(VALID_CARD)},
+        ]
+        gh._session.get.side_effect = [
+            self._mock_issue_response(),
+        ]
+
+        attempt_fix(
+            repo="owner/repo",
+            pr_number=10,
+            issue_number=2,
+            comment_body=_make_nudge_body(2, ticked={2}),
+        )
+
+        # Verify failure path taken
+        gh.upsert_comment.assert_called_once()
+        updated = gh.upsert_comment.call_args[0][3]
+        self.assertIn("❌ Auto-fix failed for #2", updated)
+        gh.add_labels.assert_called_once()
+        labels = gh.add_labels.call_args[0][2]
+        self.assertIn(LABEL_FIX_FAILED, labels)
 
 
 # ---------------------------------------------------------------------------
