@@ -114,5 +114,5 @@ orchestrator/            # Core Python orchestration
   tests/                 # Unit tests (129 tests)
 playbooks/               # Devin playbook markdown files
 scripts/                 # Upload + smoke test utilities
-demo_app/                # FastAPI demo app (seeded bugs for testing)
+demo_app/                # FastAPI demo app for testing
 ```
