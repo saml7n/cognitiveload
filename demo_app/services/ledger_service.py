@@ -15,7 +15,8 @@ def list_entries(sort_by_priority: bool = False) -> List[LedgerEntry]:
     """
     results = list(_ledger)
     if sort_by_priority:
-        results.sort(key=lambda x: x.priority.value, reverse=False) 
+        _priority_order = {Priority.HIGH: 0, Priority.MEDIUM: 1, Priority.LOW: 2}
+        results.sort(key=lambda x: _priority_order[x.priority])
     return results
 
 def add_entry(entry: LedgerEntry) -> LedgerEntry:
