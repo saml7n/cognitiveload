@@ -22,6 +22,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 # Optional playbook — set via 'Upload Devin Playbooks' workflow.
 TRIAGE_PLAYBOOK_ID = os.environ.get("TRIAGE_PLAYBOOK_ID")
 
+# Max ACU spend per triage session (cost guard-rail). 0 or unset = no limit.
+TRIAGE_MAX_ACU = int(os.environ.get("TRIAGE_MAX_ACU", "5")) or None
+
 # ---------------------------------------------------------------------------
 # Template rendering
 # ---------------------------------------------------------------------------
@@ -173,6 +176,7 @@ def triage_issue(
         title=f"Triage: Issue #{issue_number} \u2014 {issue_title[:60]}",
         tags=["triage", f"issue-{issue_number}"],
         playbook_id=TRIAGE_PLAYBOOK_ID,
+        max_acu_limit=TRIAGE_MAX_ACU,
     )
     logger.info("Devin session started: %s", session_id)
 

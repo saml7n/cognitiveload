@@ -30,6 +30,9 @@ FIX_SESSION_TIMEOUT = 1200  # 20 minutes
 # Optional playbook — set via 'Upload Devin Playbooks' workflow.
 FIX_PLAYBOOK_ID = os.environ.get("FIX_PLAYBOOK_ID")
 
+# Max ACU spend per fix session (cost guard-rail). 0 or unset = no limit.
+FIX_MAX_ACU = int(os.environ.get("FIX_MAX_ACU", "10")) or None
+
 # Regex to find ticked auto-fix checkboxes and extract issue numbers.
 _CHECKBOX_TICKED_RE = re.compile(
     r"- \[x\] \*\*Attempt auto-fix for #(\d+)\*\* with Devin"
@@ -219,6 +222,7 @@ def attempt_fix(
         tags=["fix", f"issue-{issue_number}", f"pr-{pr_number}"],
         idempotent=True,
         playbook_id=FIX_PLAYBOOK_ID,
+        max_acu_limit=FIX_MAX_ACU,
     )
     logger.info("Devin fix session started: %s", session_id)
 

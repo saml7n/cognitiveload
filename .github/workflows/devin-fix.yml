@@ -48,5 +48,6 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
           COMMENT_BODY_PREVIOUS: ${{ github.event.changes.body.from }}
           FIX_PLAYBOOK_ID: ${{ secrets.FIX_PLAYBOOK_ID }}
+          FIX_MAX_ACU: ${{ vars.FIX_MAX_ACU || '10' }}
         run: |
           PYTHONPATH=. python -m orchestrator.devin_fix

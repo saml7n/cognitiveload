@@ -43,5 +43,6 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           TRIAGE_PLAYBOOK_ID: ${{ secrets.TRIAGE_PLAYBOOK_ID }}
+          TRIAGE_MAX_ACU: ${{ vars.TRIAGE_MAX_ACU || '5' }}
         run: |
           PYTHONPATH=. python -m orchestrator.triage

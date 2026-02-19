@@ -371,3 +371,39 @@ class TestTriageIssue(unittest.TestCase):
 
         kwargs = devin_instance.create_session.call_args.kwargs
         self.assertEqual(kwargs["playbook_id"], "pb_triage_abc")
+
+    @patch("orchestrator.triage.TRIAGE_MAX_ACU", 5)
+    @patch("orchestrator.triage.GitHubClient")
+    @patch("orchestrator.triage.DevinClient")
+    def test_triage_session_has_acu_limit(self, MockDevin, MockGH):
+        """create_session must receive max_acu_limit from TRIAGE_MAX_ACU."""
+        devin_instance = MockDevin.return_value
+        devin_instance.create_session.return_value = "sess-acu"
+        devin_instance.poll_session.return_value = {
+            "status_enum": "finished",
+            "structured_output": VALID_CARD,
+            "messages": [],
+        }
+        MockGH.return_value
+
+        triage_issue(
+            repo="owner/repo",
+            issue_number=2,
+            issue_title="Some bug",
+            issue_body="Body",
+        )
+
+        kwargs = devin_instance.create_session.call_args.kwargs
+        self.assertEqual(kwargs["max_acu_limit"], 5)
+
+    def test_triage_max_acu_configurable_via_env(self):
+        """TRIAGE_MAX_ACU constant respects the environment variable."""
+        import importlib, orchestrator.triage as _mod
+        original = _mod.TRIAGE_MAX_ACU
+        try:
+            with patch.dict("os.environ", {"TRIAGE_MAX_ACU": "20"}):
+                importlib.reload(_mod)
+                self.assertEqual(_mod.TRIAGE_MAX_ACU, 20)
+        finally:
+            # Restore module to original state
+            importlib.reload(_mod)
