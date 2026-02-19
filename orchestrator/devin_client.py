@@ -7,19 +7,37 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 def _request_with_retry(fn, *args, max_retries: int = 3, **kwargs):
-    """Call fn(*args, **kwargs); retry on 429 with exponential backoff."""
+    """Call fn(*args, **kwargs); retry on 429 and 5xx with exponential backoff."""
     delay = 30  # start with 30s — Devin rate limits are per-minute
     for attempt in range(max_retries):
-        resp = fn(*args, **kwargs)
-        if resp.status_code != 429:
+        try:
+            resp = fn(*args, **kwargs)
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(
+                "Devin API connection error. Waiting %ds before retry %d/%d: %s",
+                delay, attempt + 1, max_retries, e,
+            )
+            time.sleep(delay)
+            delay *= 2
+            continue
+
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", delay))
+            logger.warning(
+                "Devin API rate limited (429). Waiting %ds before retry %d/%d.",
+                retry_after, attempt + 1, max_retries,
+            )
+            time.sleep(retry_after)
+            delay *= 2
+        elif resp.status_code >= 500:
+            logger.warning(
+                "Devin API server error (%d). Waiting %ds before retry %d/%d.",
+                resp.status_code, delay, attempt + 1, max_retries,
+            )
+            time.sleep(delay)
+            delay *= 2
+        else:
             return resp
-        retry_after = int(resp.headers.get("Retry-After", delay))
-        logger.warning(
-            "Devin API rate limited (429). Waiting %ds before retry %d/%d.",
-            retry_after, attempt + 1, max_retries,
-        )
-        time.sleep(retry_after)
-        delay *= 2
     return resp  # return final response; caller will raise_for_status
 
 class DevinClient:

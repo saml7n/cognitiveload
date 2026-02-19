@@ -1,0 +1,51 @@
+name: Devin Auto-Fix
+
+on:
+  issue_comment:
+    types: [edited]
+
+permissions:
+  issues: write          # Update comments, add labels on the issue
+  contents: write        # Devin creates branches
+  pull-requests: write   # Devin opens PRs, we update nudge comment
+  actions: read          # Read workflow status
+
+jobs:
+  fix:
+    name: Attempt Auto-Fix with Devin
+    runs-on: ubuntu-latest
+
+    # Only run when:
+    # 1. The comment is on a pull request (has pull_request key).
+    # 2. The edited comment contains the PR nudge marker.
+    # 3. An auto-fix checkbox was newly ticked.
+    if: >-
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '<!-- devin-pr-nudge:v1') &&
+      contains(github.event.comment.body, '- [x] **Attempt auto-fix for #') &&
+      !contains(github.event.changes.body.from, '- [x] **Attempt auto-fix for #')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install requests jsonschema pydantic python-dotenv
+
+      - name: Run fix orchestrator
+        env:
+          DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_BODY_PREVIOUS: ${{ github.event.changes.body.from }}
+        run: |
+          PYTHONPATH=. python -m orchestrator.devin_fix

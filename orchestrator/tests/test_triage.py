@@ -138,6 +138,14 @@ class TestRenderComment(unittest.TestCase):
         parsed = json.loads(embedded_json)
         self.assertEqual(parsed["classification"], "bug")
 
+    def test_no_checkbox_in_triage_comment(self):
+        """Triage comment is purely informational — no auto-fix checkbox."""
+        body = _render_comment(VALID_CARD)
+        self.assertNotIn("Attempt auto-fix", body)
+        self.assertNotIn("[ ]", body)
+        self.assertNotIn("[x]", body)
+
+
 
 # ---------------------------------------------------------------------------
 # triage_issue (end-to-end, mocked)
