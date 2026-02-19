@@ -8,7 +8,7 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch, call
 
-from orchestrator.triage import triage_issue, _extract_triage_card, _render_comment
+from orchestrator.triage import triage_issue, _extract_triage_card, _render_comment, _is_fixable
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +137,55 @@ class TestRenderComment(unittest.TestCase):
         embedded_json = body[start:end]
         parsed = json.loads(embedded_json)
         self.assertEqual(parsed["classification"], "bug")
+
+    def test_fixable_card_shows_checkbox(self):
+        body = _render_comment(VALID_CARD)
+        self.assertIn("- [ ] Attempt auto-fix with Devin", body)
+        self.assertIn("### 🔧 Auto-fix", body)
+
+    def test_unclear_card_hides_checkbox(self):
+        body = _render_comment(UNCLEAR_CARD)
+        self.assertNotIn("Attempt auto-fix with Devin", body)
+
+    def test_low_confidence_bug_hides_checkbox(self):
+        low_conf = {**VALID_CARD, "confidence": 0.5}
+        body = _render_comment(low_conf)
+        self.assertNotIn("Attempt auto-fix with Devin", body)
+
+    def test_bug_with_questions_hides_checkbox(self):
+        with_questions = {**VALID_CARD, "questions": ["What version?"]}
+        body = _render_comment(with_questions)
+        self.assertNotIn("Attempt auto-fix with Devin", body)
+
+    def test_feature_request_hides_checkbox(self):
+        feature = {**VALID_CARD, "classification": "feature-request"}
+        body = _render_comment(feature)
+        self.assertNotIn("Attempt auto-fix with Devin", body)
+
+
+class TestIsFixable(unittest.TestCase):
+
+    def test_clear_bug_high_confidence(self):
+        self.assertTrue(_is_fixable(VALID_CARD))
+
+    def test_unclear_not_fixable(self):
+        self.assertFalse(_is_fixable(UNCLEAR_CARD))
+
+    def test_bug_with_questions_not_fixable(self):
+        card = {**VALID_CARD, "questions": ["Repro steps?"]}
+        self.assertFalse(_is_fixable(card))
+
+    def test_low_confidence_not_fixable(self):
+        card = {**VALID_CARD, "confidence": 0.69}
+        self.assertFalse(_is_fixable(card))
+
+    def test_exactly_0_7_is_fixable(self):
+        card = {**VALID_CARD, "confidence": 0.7}
+        self.assertTrue(_is_fixable(card))
+
+    def test_feature_request_not_fixable(self):
+        card = {**VALID_CARD, "classification": "feature-request"}
+        self.assertFalse(_is_fixable(card))
 
 
 # ---------------------------------------------------------------------------
