@@ -6,7 +6,6 @@ from pathlib import Path
 
 # The script lives outside orchestrator/, so import it directly.
 import importlib
-import sys
 
 
 def _import_upload():

@@ -15,7 +15,6 @@ Outputs the playbook IDs to stdout — store them as GitHub Actions secrets
 """
 
 import argparse
-import json
 import os
 import sys
 from pathlib import Path
