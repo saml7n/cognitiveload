@@ -27,6 +27,9 @@ LABEL_FIX_FAILED = "devin:fix-failed"
 # Timeout for the fix session (longer than triage — fixes take more time).
 FIX_SESSION_TIMEOUT = 1200  # 20 minutes
 
+# Optional playbook — set via 'Upload Devin Playbooks' workflow.
+FIX_PLAYBOOK_ID = os.environ.get("FIX_PLAYBOOK_ID")
+
 # Regex to find ticked auto-fix checkboxes and extract issue numbers.
 _CHECKBOX_TICKED_RE = re.compile(
     r"- \[x\] \*\*Attempt auto-fix for #(\d+)\*\* with Devin"
@@ -215,6 +218,7 @@ def attempt_fix(
         title=f"Fix: Issue #{issue_number} \u2014 {issue_title[:60]}",
         tags=["fix", f"issue-{issue_number}", f"pr-{pr_number}"],
         idempotent=True,
+        playbook_id=FIX_PLAYBOOK_ID,
     )
     logger.info("Devin fix session started: %s", session_id)
 

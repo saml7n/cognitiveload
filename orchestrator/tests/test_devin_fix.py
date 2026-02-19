@@ -450,6 +450,38 @@ class TestAttemptFix(unittest.TestCase):
         kwargs = devin.create_session.call_args.kwargs
         self.assertTrue(kwargs.get("idempotent"), "fix session must be idempotent")
 
+    @patch("orchestrator.devin_fix.FIX_PLAYBOOK_ID", "pb_fix_xyz")
+    @patch("orchestrator.devin_fix.GitHubClient")
+    @patch("orchestrator.devin_fix.DevinClient")
+    def test_fix_session_has_playbook_id(self, MockDevin, MockGH):
+        """create_session must pass playbook_id when env var is set."""
+        devin = MockDevin.return_value
+        devin.create_session.return_value = "sess-pb"
+        devin.poll_session.return_value = {
+            "status_enum": "finished",
+            "messages": [],
+            "pull_request": {"url": "https://github.com/owner/repo/pull/99"},
+        }
+
+        gh = MockGH.return_value
+        gh.base_url = "https://api.github.com"
+        gh.get_issue_comments.return_value = [
+            {"body": _make_triage_comment(VALID_CARD)},
+        ]
+        gh._session.get.side_effect = [
+            self._mock_issue_response(title="Off-by-one"),
+        ]
+
+        attempt_fix(
+            repo="owner/repo",
+            pr_number=10,
+            issue_number=2,
+            comment_body=_make_nudge_body(2, ticked={2}),
+        )
+
+        kwargs = devin.create_session.call_args.kwargs
+        self.assertEqual(kwargs["playbook_id"], "pb_fix_xyz")
+
 
 # ---------------------------------------------------------------------------
 # Fix prompt builder

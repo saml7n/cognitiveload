@@ -19,6 +19,9 @@ from orchestrator.validation import validate_triage_card
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 
+# Optional playbook — set via 'Upload Devin Playbooks' workflow.
+TRIAGE_PLAYBOOK_ID = os.environ.get("TRIAGE_PLAYBOOK_ID")
+
 # ---------------------------------------------------------------------------
 # Template rendering
 # ---------------------------------------------------------------------------
@@ -169,6 +172,7 @@ def triage_issue(
         structured_output_schema=schema,
         title=f"Triage: Issue #{issue_number} \u2014 {issue_title[:60]}",
         tags=["triage", f"issue-{issue_number}"],
+        playbook_id=TRIAGE_PLAYBOOK_ID,
     )
     logger.info("Devin session started: %s", session_id)
 

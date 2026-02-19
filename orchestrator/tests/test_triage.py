@@ -347,3 +347,27 @@ class TestTriageIssue(unittest.TestCase):
 
         kwargs = devin_instance.create_session.call_args.kwargs
         self.assertEqual(kwargs["tags"], ["triage", "issue-2"])
+
+    @patch("orchestrator.triage.TRIAGE_PLAYBOOK_ID", "pb_triage_abc")
+    @patch("orchestrator.triage.GitHubClient")
+    @patch("orchestrator.triage.DevinClient")
+    def test_triage_session_has_playbook_id(self, MockDevin, MockGH):
+        """create_session must pass playbook_id when env var is set."""
+        devin_instance = MockDevin.return_value
+        devin_instance.create_session.return_value = "sess-pb"
+        devin_instance.poll_session.return_value = {
+            "status_enum": "finished",
+            "structured_output": VALID_CARD,
+            "messages": [],
+        }
+        MockGH.return_value
+
+        triage_issue(
+            repo="owner/repo",
+            issue_number=2,
+            issue_title="Some bug",
+            issue_body="Body",
+        )
+
+        kwargs = devin_instance.create_session.call_args.kwargs
+        self.assertEqual(kwargs["playbook_id"], "pb_triage_abc")

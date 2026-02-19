@@ -47,5 +47,6 @@ jobs:
           PR_NUMBER: ${{ github.event.issue.number }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           COMMENT_BODY_PREVIOUS: ${{ github.event.changes.body.from }}
+          FIX_PLAYBOOK_ID: ${{ secrets.FIX_PLAYBOOK_ID }}
         run: |
           PYTHONPATH=. python -m orchestrator.devin_fix
