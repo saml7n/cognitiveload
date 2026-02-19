@@ -18,7 +18,6 @@ Story 0: Decisions (no code)
           → Story 6: PR-time nudge workflow (uses triage card data from Story 5)
             → Story 7: Devin auto-fix workflow (checkbox-triggered, Devin does the heavy lifting)
               → Story 8: Devin API deep integration (structured output, playbooks, observability)
-                → Story 9: Demo runbook + seeded scenarios (Loom script, covers full loop incl. fix mode)
 ```
 
 ---
@@ -452,35 +451,3 @@ The raw prompt still carries issue-specific context (issue body, triage card, af
 - ACU limits: _unanswered_
 - Playbook creation strategy: _unanswered_
 
----
-
-## Story 9 — Demo runbook and seeded scenarios
-
-As a **candidate recording a Loom demo**, I want **a step-by-step runbook with predictable outcomes**, so that **the demo is crisp and tells a clear story in under 10 minutes**.
-
-The runbook now covers the full loop: triage → nudge → auto-fix.
-
-### Acceptance criteria
-- [ ] A runbook exists at `docs/demo_runbook.md` with exact steps:
-  - Step 1: Show repo structure and explain the system (triage → nudge → fix pipeline).
-  - Step 2: Create Issue A (clear bug) → triage card appears with auto-fix checkbox.
-  - Step 3: Create Issue B (vague bug) → clarification questions appear, **no** auto-fix checkbox.
-  - Step 4: Open a PR touching Bug A's affected path → nudge comment appears linking to Issue A.
-  - Step 5: Tick the auto-fix checkbox on Issue A → Devin attempts fix → PR opened or failure report.
-- [ ] Pre-written issue bodies exist in `docs/demo_issues/` (one file per issue, ready to copy-paste).
-- [ ] A pre-written PR description and branch change set exist in `docs/demo_pr/`.
-- [ ] Each step documents the expected outcome (screenshot or text description).
-- [ ] The runbook includes timing estimates per step and talking points.
-
-### Verification
-- Walk through the runbook end-to-end. Each step produces the documented outcome.
-
-### Blocked until answered
-1. Create issues live during Loom or pre-create them?
-2. Any specific talking points required for the video (e.g., "why Devin vs other agents")?
-3. Include Slack notifications as a bonus, or keep it GitHub-only?
-
-**Recorded answers:**
-- Issue creation approach: _unanswered_
-- Talking points: _unanswered_
-- Slack: _unanswered_
