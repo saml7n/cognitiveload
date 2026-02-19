@@ -166,6 +166,16 @@ class TestCreateSessionParams(unittest.TestCase):
         self.assertEqual(sent_payload["playbook_id"], "pb_123")
 
     @patch('orchestrator.devin_client.requests.post')
+    def test_empty_string_playbook_id_omitted(self, mock_post):
+        """An empty string playbook_id (e.g. unset secret) should not be sent."""
+        self._mock_success(mock_post)
+
+        self.client.create_session("prompt", playbook_id="")
+
+        sent_payload = mock_post.call_args[1]["json"]
+        self.assertNotIn("playbook_id", sent_payload)
+
+    @patch('orchestrator.devin_client.requests.post')
     def test_omits_none_params(self, mock_post):
         """Calling with defaults sends only the prompt — no extra keys."""
         self._mock_success(mock_post)

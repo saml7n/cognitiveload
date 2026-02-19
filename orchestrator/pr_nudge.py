@@ -64,6 +64,51 @@ def _extract_card_from_comment(body: str) -> dict[str, Any] | None:
 
 
 # ---------------------------------------------------------------------------
+# Path normalisation
+# ---------------------------------------------------------------------------
+
+def _normalize_path(path: str, repo_name: str = "") -> str:
+    """Strip absolute sandbox prefixes that Devin may include.
+
+    Devin sometimes returns paths like
+    ``/home/ubuntu/repos/myrepo/demo_app/foo.py`` instead of the
+    repo-relative ``demo_app/foo.py``.  We normalise by:
+    1. Trying to split on ``<repo_name>/`` and taking the remainder.
+    2. Falling back to stripping any leading ``/…/`` up to and including
+       the first path component that matches a known root directory.
+    """
+    if not path.startswith("/"):
+        return path  # already relative
+
+    # Strategy 1: split on repo name
+    if repo_name:
+        # repo_name may be "owner/repo" — use just the repo part
+        short = repo_name.split("/")[-1] if "/" in repo_name else repo_name
+        marker = f"/{short}/"
+        idx = path.find(marker)
+        if idx != -1:
+            return path[idx + len(marker):]
+
+    # Strategy 2: drop everything up to and including /repos/<something>/
+    parts = path.split("/")
+    # e.g. ['', 'home', 'ubuntu', 'repos', 'cognitiveload', 'demo_app', ...]
+    if "repos" in parts:
+        repos_idx = parts.index("repos")
+        if repos_idx + 2 < len(parts):
+            return "/".join(parts[repos_idx + 2:])
+
+    # Strategy 3: just lstrip the leading slash (best-effort)
+    return path.lstrip("/")
+
+
+def _normalize_affected_paths(
+    affected_paths: list[str], repo_name: str = ""
+) -> list[str]:
+    """Normalise a list of affected paths from a triage card."""
+    return [_normalize_path(p, repo_name) for p in affected_paths]
+
+
+# ---------------------------------------------------------------------------
 # Path matching
 # ---------------------------------------------------------------------------
 
@@ -75,10 +120,14 @@ def _match_paths(
     A match occurs when:
     - A PR file exactly equals an affected path, OR
     - A PR file starts with an affected path (prefix/directory match).
+
+    ``affected_paths`` are normalised first to strip any absolute
+    sandbox prefixes that Devin may have included.
     """
+    normalised = _normalize_affected_paths(affected_paths)
     matched: list[str] = []
     for pr_file in pr_files:
-        for affected in affected_paths:
+        for affected in normalised:
             if pr_file == affected or pr_file.startswith(affected.rstrip("/") + "/"):
                 if pr_file not in matched:
                     matched.append(pr_file)
@@ -199,6 +248,10 @@ def nudge_pr(
         affected_paths = card.get("affected_paths", [])
         if not affected_paths:
             continue
+
+        # Normalise before matching — Devin sometimes returns absolute
+        # sandbox paths (e.g. /home/ubuntu/repos/<repo>/…).
+        affected_paths = _normalize_affected_paths(affected_paths, repo)
 
         matched_files = _match_paths(pr_files, affected_paths)
         if matched_files:

@@ -27,17 +27,22 @@ def build_triage_prompt(
     issue_number: int,
     issue_title: str,
     issue_body: str,
+    playbook_active: bool = False,
 ) -> str:
     """Return the prompt string sent to Devin for triage.
 
-    The prompt instructs Devin to:
-    1. Read the issue.
-    2. Inspect the repository for relevant code.
-    3. Return a JSON object matching our triage card schema.
+    When *playbook_active* is ``True`` the attached Devin playbook already
+    contains the full procedure, so the prompt only supplies context
+    (issue details + output schema reference).  This keeps the prompt
+    compact and avoids duplicating the playbook instructions.
+
+    When *playbook_active* is ``False`` the prompt includes the full
+    inline procedure so the session is self-contained.
     """
     schema = _load_schema()
 
-    return f"""\
+    # -- Context header (always present) -----------------------------------
+    header = f"""\
 You are triaging a GitHub issue for the repository **{repo}**.
 
 ## Issue #{issue_number}: {issue_title}
@@ -45,7 +50,32 @@ You are triaging a GitHub issue for the repository **{repo}**.
 {issue_body}
 
 ---
+"""
 
+    # -- Compact prompt (playbook handles procedure) -----------------------
+    if playbook_active:
+        return (
+            header
+            + f"""\
+## Context
+
+IMPORTANT: You are running in **fully autonomous mode**. Do NOT ask for
+clarification or confirmation. Do NOT pause and wait for human input.
+
+The attached playbook describes the step-by-step procedure.
+Return repo-relative paths (not absolute sandbox paths) in `affected_paths`.
+
+Return **only** a single JSON object (no markdown fences, no commentary)
+with these fields: `schema_version` (always `"v1"`), `classification`,
+`confidence`, `summary`, `questions`, `affected_paths`,
+`suggested_labels`, `suggested_priority`.
+"""
+        )
+
+    # -- Full inline prompt (no playbook) ----------------------------------
+    return (
+        header
+        + f"""\
 ## Your task
 
 IMPORTANT: You are running in **fully autonomous mode**. Do NOT ask for
@@ -78,9 +108,10 @@ Field notes:
 - `confidence`: 0.0 – 1.0, your confidence in the classification.
 - `summary`: ≤ 1000 chars, human-readable.
 - `questions`: list of strings (empty if the issue is clear).
-- `affected_paths`: file paths or folder prefixes in the repo.
+- `affected_paths`: repo-relative file paths or folder prefixes (e.g. `demo_app/services/foo.py`, **not** absolute sandbox paths).
 - `suggested_labels`: GitHub labels to apply (e.g. `["bug", "priority-high"]`).
 - `suggested_priority`: one of `low`, `medium`, `high`, `critical`.
 
 Return the JSON object now.
 """
+    )

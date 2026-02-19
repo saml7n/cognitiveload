@@ -97,7 +97,7 @@ class DevinClient:
             payload["max_acu_limit"] = max_acu_limit
         if idempotent:
             payload["idempotent"] = True
-        if playbook_id is not None:
+        if playbook_id:  # skip None and empty string
             payload["playbook_id"] = playbook_id
 
         try:
