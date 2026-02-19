@@ -102,3 +102,105 @@ class TestDevinClient(unittest.TestCase):
         with patch('time.sleep', return_value=None):
              with self.assertRaises(TimeoutError):
                 self.client.poll_session("session_123", interval=0.1, timeout=0.2)
+
+
+class TestCreateSessionParams(unittest.TestCase):
+    """Verify that create_session passes through all v1 API parameters."""
+
+    def setUp(self):
+        self.api_key = "test_api_key"
+        self.client = DevinClient(self.api_key)
+        self.base_url = "https://api.devin.ai/v1"
+
+    def _mock_success(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"session_id": "sess_new"}
+        mock_post.return_value = mock_resp
+
+    @patch('orchestrator.devin_client.requests.post')
+    def test_passes_structured_output_schema(self, mock_post):
+        self._mock_success(mock_post)
+        schema = {"type": "object", "properties": {"x": {"type": "string"}}}
+
+        self.client.create_session("prompt", structured_output_schema=schema)
+
+        sent_payload = mock_post.call_args[1]["json"]
+        self.assertEqual(sent_payload["structured_output_schema"], schema)
+
+    @patch('orchestrator.devin_client.requests.post')
+    def test_passes_tags_and_title(self, mock_post):
+        self._mock_success(mock_post)
+
+        self.client.create_session("prompt", tags=["triage", "issue-2"], title="Triage: Issue #2")
+
+        sent_payload = mock_post.call_args[1]["json"]
+        self.assertEqual(sent_payload["tags"], ["triage", "issue-2"])
+        self.assertEqual(sent_payload["title"], "Triage: Issue #2")
+
+    @patch('orchestrator.devin_client.requests.post')
+    def test_passes_max_acu_limit(self, mock_post):
+        self._mock_success(mock_post)
+
+        self.client.create_session("prompt", max_acu_limit=5)
+
+        sent_payload = mock_post.call_args[1]["json"]
+        self.assertEqual(sent_payload["max_acu_limit"], 5)
+
+    @patch('orchestrator.devin_client.requests.post')
+    def test_passes_idempotent_flag(self, mock_post):
+        self._mock_success(mock_post)
+
+        self.client.create_session("prompt", idempotent=True)
+
+        sent_payload = mock_post.call_args[1]["json"]
+        self.assertTrue(sent_payload["idempotent"])
+
+    @patch('orchestrator.devin_client.requests.post')
+    def test_passes_playbook_id(self, mock_post):
+        self._mock_success(mock_post)
+
+        self.client.create_session("prompt", playbook_id="pb_123")
+
+        sent_payload = mock_post.call_args[1]["json"]
+        self.assertEqual(sent_payload["playbook_id"], "pb_123")
+
+    @patch('orchestrator.devin_client.requests.post')
+    def test_omits_none_params(self, mock_post):
+        """Calling with defaults sends only the prompt — no extra keys."""
+        self._mock_success(mock_post)
+
+        self.client.create_session("prompt")
+
+        sent_payload = mock_post.call_args[1]["json"]
+        self.assertEqual(sent_payload, {"prompt": "prompt"})
+        self.assertNotIn("structured_output_schema", sent_payload)
+        self.assertNotIn("tags", sent_payload)
+        self.assertNotIn("title", sent_payload)
+        self.assertNotIn("max_acu_limit", sent_payload)
+        self.assertNotIn("idempotent", sent_payload)
+        self.assertNotIn("playbook_id", sent_payload)
+
+    @patch('orchestrator.devin_client.requests.post')
+    def test_passes_all_params_together(self, mock_post):
+        self._mock_success(mock_post)
+        schema = {"type": "object"}
+
+        self.client.create_session(
+            "prompt",
+            structured_output_schema=schema,
+            tags=["fix"],
+            title="Fix: #5",
+            max_acu_limit=10,
+            idempotent=True,
+            playbook_id="pb_456",
+        )
+
+        sent_payload = mock_post.call_args[1]["json"]
+        self.assertEqual(sent_payload["prompt"], "prompt")
+        self.assertEqual(sent_payload["structured_output_schema"], schema)
+        self.assertEqual(sent_payload["tags"], ["fix"])
+        self.assertEqual(sent_payload["title"], "Fix: #5")
+        self.assertEqual(sent_payload["max_acu_limit"], 10)
+        self.assertTrue(sent_payload["idempotent"])
+        self.assertEqual(sent_payload["playbook_id"], "pb_456")

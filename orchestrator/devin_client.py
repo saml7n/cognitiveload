@@ -57,20 +57,48 @@ class DevinClient:
             "Content-Type": "application/json"
         }
 
-    def create_session(self, prompt: str, snapshot_id: Optional[str] = None, **kwargs) -> str:
+    def create_session(
+        self,
+        prompt: str,
+        snapshot_id: Optional[str] = None,
+        *,
+        structured_output_schema: Optional[Dict[str, Any]] = None,
+        tags: Optional[list[str]] = None,
+        title: Optional[str] = None,
+        max_acu_limit: Optional[int] = None,
+        idempotent: bool = False,
+        playbook_id: Optional[str] = None,
+        **kwargs,
+    ) -> str:
         """
         Starts a new Devin session.
         :param prompt: The initial instruction for Devin.
         :param snapshot_id: Optional ID of a snapshot to start from.
+        :param structured_output_schema: JSON Schema (Draft 7) for validating structured output. Max 64KB.
+        :param tags: List of tags for observability/filtering on the Devin dashboard.
+        :param title: Custom title for the session (auto-generated if omitted).
+        :param max_acu_limit: Maximum ACU spend for this session (positive integer).
+        :param idempotent: If True, prevents duplicate sessions on re-run.
+        :param playbook_id: ID of a Devin playbook to attach to this session.
         :param kwargs: Additional arguments to pass to the API.
         :return: The session_id of the created session.
         """
-        payload = {
-            "prompt": prompt,
-            **kwargs
-        }
+        payload: Dict[str, Any] = {"prompt": prompt, **kwargs}
+
         if snapshot_id:
             payload["snapshot_id"] = snapshot_id
+        if structured_output_schema is not None:
+            payload["structured_output_schema"] = structured_output_schema
+        if tags is not None:
+            payload["tags"] = tags
+        if title is not None:
+            payload["title"] = title
+        if max_acu_limit is not None:
+            payload["max_acu_limit"] = max_acu_limit
+        if idempotent:
+            payload["idempotent"] = True
+        if playbook_id is not None:
+            payload["playbook_id"] = playbook_id
 
         try:
             resp = _request_with_retry(

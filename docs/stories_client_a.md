@@ -17,7 +17,8 @@ Story 0: Decisions (no code)
         → Story 5: Issue intake workflow (first time the "bot" runs end-to-end)
           → Story 6: PR-time nudge workflow (uses triage card data from Story 5)
             → Story 7: Devin auto-fix workflow (checkbox-triggered, Devin does the heavy lifting)
-              → Story 8: Demo runbook + seeded scenarios (Loom script, covers full loop incl. fix mode)
+              → Story 8: Devin API deep integration (structured output, playbooks, observability)
+                → Story 9: Demo runbook + seeded scenarios (Loom script, covers full loop incl. fix mode)
 ```
 
 ---
@@ -361,7 +362,99 @@ PR opened → nudge comment lists matched issues (with checkboxes for fixable bu
 
 ---
 
-## Story 8 — Demo runbook and seeded scenarios
+## Story 8 — Devin API deep integration
+
+As a **VP Engineering evaluating this PoC**, I want **the integration to use Devin's full API surface — not just `prompt`**, so that **it's clear the team understands the platform deeply and has thought about production-readiness (cost control, observability, structured contracts, reusable playbooks)**.
+
+Right now `create_session()` sends only `{ "prompt": "..." }`. The Devin v1 API accepts 12 parameters on session creation and returns rich metadata (including the PR URL) on the response — we use almost none of it. This story upgrades every Devin API call to use the right features.
+
+### Design
+
+#### 1. Structured Output Schema (triage sessions)
+
+We already have `orchestrator/schemas/triage_card.schema.json` and already check `session_data.get("structured_output")` in `triage.py`. But we never **pass the schema to the API**. Adding `structured_output_schema` to `create_session()` tells Devin to validate its output server-side and return it in a dedicated field — no more fishing through messages for JSON.
+
+```python
+devin.create_session(
+    prompt=prompt,
+    structured_output_schema=triage_schema,  # JSON Schema Draft 7, max 64KB
+)
+```
+
+This is Pattern D from the reference doc: *"Use Structured Output prompts to force Devin to return valid JSON."*
+
+#### 2. Native PR detection (fix sessions)
+
+`GET /v1/sessions/{id}` returns `pull_request: { url }` when Devin opens a PR. We currently search the GitHub API for a branch named `devin/fix-issue-{N}` — this is unnecessary. Using the native field is simpler, faster, and idiomatic.
+
+```python
+session_data = devin.poll_session(session_id)
+pr_url = (session_data.get("pull_request") or {}).get("url")
+```
+
+The existing `_find_fix_pr()` GitHub API branch search is removed entirely — the native field is the single source of truth.
+
+#### 3. Tags, titles, and cost controls
+
+Every session gets metadata for observability and cost management:
+
+| Parameter | Triage session | Fix session |
+|---|---|---|
+| `title` | `"Triage: Issue #42 — Off-by-one"` | `"Fix: Issue #42 — Off-by-one"` |
+| `tags` | `["triage", "issue-42"]` | `["fix", "issue-42", "pr-5"]` |
+| `max_acu_limit` | `5` | `10` |
+
+A VP Engineering audience will notice cost controls and observability hooks — these say "I thought about running this in production."
+
+#### 4. Playbook creation (programmatic)
+
+The Devin API has `POST /v1/playbooks` (`title`, `body`). We create two reusable playbooks:
+
+- **"Bug Triage"** playbook — the triage procedure (currently inlined in `prompt_builder.py`).
+- **"Bug Fix"** playbook — the fix procedure (currently inlined in `fix_prompt_builder.py`).
+
+Playbooks are created once (idempotent by title lookup), then referenced via `playbook_id` on `create_session()`. This shows we understand Devin's **reusable instruction system** — playbooks are how orgs standardize agent behavior at scale.
+
+The raw prompt still carries issue-specific context (issue body, triage card, affected paths). The playbook carries the *procedure* (steps, verification, constraints). Clean separation of concerns.
+
+#### 5. Idempotent sessions
+
+`create_session(idempotent=True)` prevents duplicate sessions if a GitHub Actions workflow re-runs. Matches our idempotent-comments philosophy.
+
+### Acceptance criteria
+- [ ] **Structured output**: `triage.py` passes the triage card JSON Schema to `create_session()` via the `structured_output_schema` parameter. The `_extract_triage_card()` function still checks `structured_output` first (already does), but now the field is populated by the API rather than by luck.
+- [ ] **Native PR detection**: `devin_fix.py` reads `session_data["pull_request"]["url"]` from the Devin session response. The old `_find_fix_pr()` GitHub API branch search is deleted.
+- [ ] **Session titles**: Both triage and fix sessions pass a descriptive `title` derived from the issue number and title.
+- [ ] **Session tags**: Both triage and fix sessions pass `tags` for filtering/observability (e.g., `["triage", "issue-42"]`).
+- [ ] **ACU limit**: Both triage and fix sessions pass `max_acu_limit` (configurable, defaults: 5 for triage, 10 for fix).
+- [ ] **Idempotent flag**: Fix sessions pass `idempotent=True` to prevent duplicate sessions on workflow re-run.
+- [ ] **Playbooks**: A helper module at `orchestrator/playbook_manager.py` creates or retrieves (by title) a "Bug Triage" and "Bug Fix" playbook via the Devin API. `triage.py` and `devin_fix.py` pass the corresponding `playbook_id` to `create_session()`.
+- [ ] **`DevinClient` extended**: `create_session()` accepts all new keyword args (`structured_output_schema`, `tags`, `title`, `max_acu_limit`, `idempotent`, `playbook_id`) and passes them through to the API payload.
+- [ ] **Tests updated**: Existing tests still pass. New unit tests cover:
+  - `create_session` passes through new parameters in the request body.
+  - PR detection reads `pull_request.url` from session data (no GitHub API fallback).
+  - Playbook manager create-or-get logic (mocked API).
+  - Structured output extraction when the API populates `structured_output`.
+- [ ] All existing tests still pass (≥92 tests).
+
+### Verification
+- Trigger triage on a test issue → Devin session created with `structured_output_schema`, `title`, `tags`, `max_acu_limit`, and `playbook_id` visible in API logs.
+- Trigger auto-fix → session uses native `pull_request` field for PR detection, has `idempotent=True`, uses fix playbook.
+- Run `pytest` → all tests pass.
+
+### Blocked until answered
+1. Confirm the Devin API key has permission to create playbooks (org-level vs personal key — `apk_` vs `apk_user_`)?
+2. ACU limits: are `5` (triage) and `10` (fix) reasonable defaults, or should they be higher for safety?
+3. Should playbooks be created on every run (idempotent by title) or once during setup and hardcoded?
+
+**Recorded answers:**
+- Playbook API access: _unanswered_
+- ACU limits: _unanswered_
+- Playbook creation strategy: _unanswered_
+
+---
+
+## Story 9 — Demo runbook and seeded scenarios
 
 As a **candidate recording a Loom demo**, I want **a step-by-step runbook with predictable outcomes**, so that **the demo is crisp and tells a clear story in under 10 minutes**.
 
