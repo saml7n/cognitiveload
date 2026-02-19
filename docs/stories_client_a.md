@@ -16,8 +16,8 @@ Story 0: Decisions (no code)
       → Story 4: GitHub API helpers (standalone, tested in isolation)
         → Story 5: Issue intake workflow (first time the "bot" runs end-to-end)
           → Story 6: PR-time nudge workflow (uses triage card data from Story 5)
-            → Story 7: Demo runbook + seeded issues (Loom script)
-              → Story 8 (optional): Fix mode (repro → fix → PR)
+            → Story 7: Devin auto-fix workflow (checkbox-triggered, Devin does the heavy lifting)
+              → Story 8: Demo runbook + seeded scenarios (Loom script, covers full loop incl. fix mode)
 ```
 
 ---
@@ -265,20 +265,92 @@ As a **developer opening a PR**, I want to **see a heads-up when my changes touc
 
 ---
 
-## Story 7 — Demo runbook and seeded scenarios
+## Story 7 — Devin auto-fix workflow (checkbox-triggered)
+
+As a **senior engineer**, I want to **tick a checkbox on a triaged issue and have Devin attempt to reproduce, fix, and commit a solution**, so that **small-to-medium bugs get fixed without waiting weeks for someone to pick them up**.
+
+This is where we let Devin do the heavy lifting — including its native GitHub integration for branching, committing, and opening PRs.
+
+### Design
+
+The triage comment (Story 5) already renders a card. This story adds a conditional "attempt fix" checkbox:
+
+```markdown
+### 🔧 Auto-fix
+- [ ] Attempt auto-fix with Devin
+```
+
+The checkbox is **only shown** when the issue is actionable:
+- Classification is `bug` (not `unclear`, `question`, or `feature-request`).
+- The `questions` array is empty (no outstanding clarification needed).
+- Confidence is ≥ 0.7.
+
+When a user edits the triage comment to tick the checkbox (`- [x]`), a new workflow detects it and kicks off a Devin session with a "fix" prompt. Devin uses its native GitHub app connection to create a branch, commit the fix, and open a PR — the orchestrator just starts the session, monitors progress, and reports the outcome back on the issue.
+
+### Acceptance criteria
+- [ ] The triage comment renderer (Story 5) conditionally includes the auto-fix checkbox when the issue qualifies (bug, no open questions, confidence ≥ 0.7).
+- [ ] Issues that are `unclear`, `question`, or have unanswered questions do **not** show the checkbox.
+- [ ] A GitHub Actions workflow exists at `.github/workflows/devin-fix.yml` triggered on `issue_comment: [edited]`.
+- [ ] When triggered, the workflow:
+  1. Detects the checkbox state change (`- [ ]` → `- [x]`).
+  2. Verifies the issue has the `devin:triaged` label (guard rail).
+  3. Starts a Devin session with a fix prompt that instructs Devin to:
+     a. Read the triage card and issue context.
+     b. Write a reproduction test/script that demonstrates the bug.
+     c. Fix the code.
+     d. Verify the fix passes the repro test and the existing test suite.
+     e. Create a branch (`devin/fix-issue-{number}`) and open a PR linking back to the issue.
+  4. Polls until the session finishes (or times out / fails).
+- [ ] On success (Devin finishes + PR opened):
+  - The orchestrator updates the triage comment with a "✅ Fix attempted" section linking to the PR.
+  - The label `devin:fix-attempted` is applied.
+- [ ] On failure (Devin blocked, timed out, or no PR created):
+  - The orchestrator updates the triage comment with a "❌ Auto-fix failed" section containing:
+    - What Devin tried.
+    - Where it got stuck.
+    - Pointers for manual investigation (relevant files, repro steps attempted).
+  - The label `devin:fix-failed` is applied.
+- [ ] The fix flow never runs on issues without a triage card.
+- [ ] Unit tests cover: checkbox detection, prompt building, success/failure comment rendering.
+
+### Verification
+- On a triaged clear-bug issue: tick the checkbox → Devin session starts → PR opened or failure report posted.
+- On a vague/unclear issue: checkbox is not present in the triage comment.
+- On a triaged issue where the fix fails: failure message with pointers appears.
+
+### Blocked until answered
+1. Can the workflow have `contents: write` and `pull-requests: write` permissions?
+2. Branch naming convention for fix PRs (recommended: `devin/fix-issue-{number}`)?
+3. Should the fix prompt instruct Devin to run the full test suite, or only a targeted repro test?
+4. Timeout for the fix session (longer than triage — recommended: 15–20 minutes)?
+5. Should fix mode work for `feature-request` too, or bugs only?
+
+**Recorded answers:**
+- Write permissions: _unanswered_
+- Branch naming: _unanswered_
+- Test scope: _unanswered_
+- Fix timeout: _unanswered_
+- Feature-request fix: _unanswered_
+
+---
+
+## Story 8 — Demo runbook and seeded scenarios
 
 As a **candidate recording a Loom demo**, I want **a step-by-step runbook with predictable outcomes**, so that **the demo is crisp and tells a clear story in under 10 minutes**.
 
+The runbook now covers the full loop: triage → nudge → auto-fix.
+
 ### Acceptance criteria
 - [ ] A runbook exists at `docs/demo_runbook.md` with exact steps:
-  - Step 1: Show repo structure and explain the system.
-  - Step 2: Create (or open) Issue A (clear bug) → triage card appears.
-  - Step 3: Create (or open) Issue B (vague bug) → clarification questions appear.
+  - Step 1: Show repo structure and explain the system (triage → nudge → fix pipeline).
+  - Step 2: Create Issue A (clear bug) → triage card appears with auto-fix checkbox.
+  - Step 3: Create Issue B (vague bug) → clarification questions appear, **no** auto-fix checkbox.
   - Step 4: Open a PR touching Bug A's affected path → nudge comment appears linking to Issue A.
-  - Step 5: (Optional) Trigger fix mode on Issue A → PR or fix plan appears.
+  - Step 5: Tick the auto-fix checkbox on Issue A → Devin attempts fix → PR opened or failure report.
 - [ ] Pre-written issue bodies exist in `docs/demo_issues/` (one file per issue, ready to copy-paste).
 - [ ] A pre-written PR description and branch change set exist in `docs/demo_pr/`.
 - [ ] Each step documents the expected outcome (screenshot or text description).
+- [ ] The runbook includes timing estimates per step and talking points.
 
 ### Verification
 - Walk through the runbook end-to-end. Each step produces the documented outcome.
@@ -292,33 +364,3 @@ As a **candidate recording a Loom demo**, I want **a step-by-step runbook with p
 - Issue creation approach: _unanswered_
 - Talking points: _unanswered_
 - Slack: _unanswered_
-
----
-
-## Story 8 (Optional) — Fix mode: repro-first + PR creation
-
-As a **senior engineer**, I want the bot to **optionally attempt a fix with verification evidence**, so that **small-to-medium bugs don't sit for months waiting for someone to pick them up**.
-
-### Acceptance criteria
-- [ ] When an issue is labeled `devin:fix` (opt-in only), the orchestrator:
-  1. Starts a Devin session with a "fix" prompt that instructs: write a repro script → run it → fix the code → rerun the repro → report results.
-  2. If the fix passes verification: opens a PR (or outputs a patch) linked to the issue.
-  3. If the fix fails verification: posts a comment explaining what was tried and what failed.
-- [ ] The PR (or patch) includes:
-  - the repro script
-  - the code fix
-  - evidence that the repro now passes
-- [ ] Fix mode is gated: it only runs on issues that already have a triage card.
-
-### Verification
-- Label a triaged issue with `devin:fix` → Devin attempts fix → PR opened or failure report posted.
-
-### Blocked until answered
-1. Is PR creation in scope for the take-home?
-2. If yes: can workflows have `contents: write` and `pull-requests: write` permissions?
-3. Should fixes target this repo or a separate demo repo?
-
-**Recorded answers:**
-- PR creation in scope: _unanswered_
-- Write permissions: _unanswered_
-- Fix target repo: _unanswered_
