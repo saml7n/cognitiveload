@@ -297,164 +297,54 @@ Fix sessions pass `idempotent=True` to prevent duplicate sessions when a GitHub 
 
 ---
 
-## Deliverable 8: Playbook Manager
+## Deliverable 8: Playbook Content + Upload Script + Workflow
 
 ### What
 
-New module `orchestrator/playbook_manager.py` that creates or retrieves playbooks via the Devin API. Exposes two functions: `get_or_create_triage_playbook()` and `get_or_create_fix_playbook()`.
+Playbook content lives in the repo as version-controlled markdown. A one-off
+upload script and a manual-dispatch GitHub Actions workflow handle creation
+and updates via the Devin API. No runtime API calls — playbook IDs are stored
+as GitHub Actions secrets after uploading.
 
-### Files & lines affected
+### Files
 
-| File | Lines | Change |
+| File | Status | Purpose |
 |---|---|---|
-| `orchestrator/playbook_manager.py` | **New file** | ~80 lines. See detail below. |
-| `orchestrator/tests/test_playbook_manager.py` | **New file** | ~100 lines of tests. |
+| `playbooks/triage.md` | **New** | Reusable triage instructions |
+| `playbooks/fix.md` | **New** | Reusable auto-fix instructions |
+| `scripts/upload_playbooks.py` | **New** | CLI to create/update playbooks via Devin API |
+| `.github/workflows/upload-playbooks.yml` | **New** | Manual dispatch workflow to run the upload script |
 
-### Detail
+### Usage
 
-```python
-# orchestrator/playbook_manager.py
+```bash
+# Local one-off upload
+DEVIN_API_KEY=apk_... python scripts/upload_playbooks.py
 
-"""
-Manages Devin playbooks — reusable instruction sets for triage and fix sessions.
+# Update existing playbooks
+DEVIN_API_KEY=apk_... python scripts/upload_playbooks.py \
+    --triage-id pb_abc123 --fix-id pb_def456
 
-Playbooks separate *procedure* (how to triage / fix) from *context* (the specific
-issue details). The prompt carries context; the playbook carries procedure.
-"""
-
-import logging
-import os
-from typing import Optional
-
-import requests
-
-logger = logging.getLogger(__name__)
-
-DEVIN_API_BASE = "https://api.devin.ai/v1"
-
-TRIAGE_PLAYBOOK_TITLE = "Bug Triage — cognitiveload"
-FIX_PLAYBOOK_TITLE = "Bug Fix — cognitiveload"
-
-# The playbook body is the *procedure* portion of what currently lives inline
-# in prompt_builder.py / fix_prompt_builder.py.
-
-TRIAGE_PLAYBOOK_BODY = """\
-## Procedure
-1. Read the issue carefully.
-2. Clone the repository (you have access via the Devin GitHub App) and investigate
-   the codebase to understand which files are likely affected.
-3. Decide whether this is a **bug**, **feature-request**, **question**, or **unclear**.
-4. If the issue is unclear or missing key information, list up to 4 targeted
-   clarifying questions in the `questions` array — but still return the full JSON card.
-5. If the issue is clear, provide a concise summary, affected file paths,
-   suggested labels, and a priority.
-
-## Specifications
-- Return **only** a single JSON object conforming to the triage card schema
-  (provided via structured_output_schema).
-- `schema_version` is always `"v1"`.
-- `confidence` is 0.0–1.0.
-- `summary` ≤ 1000 chars.
-
-## Advice
-- Do NOT ask the user for clarification. You are fully autonomous.
-- If anything is unclear, set classification to `unclear` and fill `questions`.
-- Investigate the actual codebase — don't guess file paths.
-
-## Forbidden Actions
-- Do not create PRs, branches, or modify any files.
-- Do not close or modify the issue.
-"""
-
-FIX_PLAYBOOK_BODY = """\
-## Procedure
-1. Read the issue and triage card. Inspect the affected files in the repository.
-2. Write a reproduction test that **demonstrates the bug** (should FAIL on current code).
-3. Fix the code with the minimal change needed.
-4. Run the reproduction test — it should now PASS.
-5. Run the full test suite: `PYTHONPATH=. python -m pytest`
-6. Create a branch named `devin/fix-issue-{issue_number}`, commit, push, and open a PR.
-
-## Specifications
-- PR title: `fix: <concise description>`
-- PR body must link to the issue with `Closes #N`.
-- All tests must pass before opening the PR.
-
-## Advice
-- Prefer the smallest, most targeted fix — do not refactor unrelated code.
-- Complete everything autonomously. Do not wait for human input at any point.
-
-## Forbidden Actions
-- Do not modify files outside the scope of the bug.
-- Do not close the issue directly — the PR handles that.
-- Do NOT open a PR if tests fail.
-"""
-
-
-def _get_headers() -> dict:
-    api_key = os.environ.get("DEVIN_API_KEY", "")
-    return {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-
-
-def _find_playbook_by_title(title: str) -> Optional[str]:
-    """List playbooks and return the ID of the one matching `title`, or None."""
-    resp = requests.get(f"{DEVIN_API_BASE}/playbooks", headers=_get_headers())
-    resp.raise_for_status()
-    for pb in resp.json().get("playbooks", resp.json() if isinstance(resp.json(), list) else []):
-        if pb.get("title") == title:
-            return pb["playbook_id"]
-    return None
-
-
-def _create_playbook(title: str, body: str) -> str:
-    """Create a playbook and return its ID."""
-    resp = requests.post(
-        f"{DEVIN_API_BASE}/playbooks",
-        headers=_get_headers(),
-        json={"title": title, "body": body},
-    )
-    resp.raise_for_status()
-    return resp.json()["playbook_id"]
-
-
-def get_or_create_playbook(title: str, body: str) -> str:
-    """Return the playbook ID for `title`, creating it if it doesn't exist."""
-    existing_id = _find_playbook_by_title(title)
-    if existing_id:
-        logger.info("Found existing playbook '%s': %s", title, existing_id)
-        return existing_id
-    new_id = _create_playbook(title, body)
-    logger.info("Created playbook '%s': %s", title, new_id)
-    return new_id
-
-
-def get_or_create_triage_playbook() -> str:
-    return get_or_create_playbook(TRIAGE_PLAYBOOK_TITLE, TRIAGE_PLAYBOOK_BODY)
-
-
-def get_or_create_fix_playbook() -> str:
-    return get_or_create_playbook(FIX_PLAYBOOK_TITLE, FIX_PLAYBOOK_BODY)
+# Via GitHub Actions: Actions → "Upload Devin Playbooks" → Run workflow
+# Optionally pass existing IDs to update instead of create.
 ```
+
+Output: `TRIAGE_PLAYBOOK_ID=pb_...` and `FIX_PLAYBOOK_ID=pb_...` — store
+these as GitHub Actions secrets.
 
 ### Unit tests
 
 | Test | File | What it asserts |
 |---|---|---|
-| `test_find_playbook_by_title_found` | `test_playbook_manager.py` | Mock `GET /v1/playbooks` returning a list with matching title → returns the ID. |
-| `test_find_playbook_by_title_not_found` | `test_playbook_manager.py` | Mock `GET /v1/playbooks` returning empty → returns `None`. |
-| `test_create_playbook_posts_correctly` | `test_playbook_manager.py` | Mock `POST /v1/playbooks` → assert request body has `title` and `body`, returns `playbook_id`. |
-| `test_get_or_create_uses_existing` | `test_playbook_manager.py` | Mock list with existing playbook → `POST` never called, returns existing ID. |
-| `test_get_or_create_creates_when_missing` | `test_playbook_manager.py` | Mock list empty, mock `POST` → creates and returns new ID. |
-| `test_triage_playbook_title_and_body` | `test_playbook_manager.py` | Call `get_or_create_triage_playbook()` → assert title is `"Bug Triage — cognitiveload"` and body contains `"Procedure"`. |
-| `test_fix_playbook_title_and_body` | `test_playbook_manager.py` | Same for fix. |
+| `test_create_playbook_returns_id` | `test_upload_playbooks.py` | Mock POST → returns playbook_id |
+| `test_update_playbook_calls_put` | `test_upload_playbooks.py` | Mock PUT → URL contains playbook_id |
+| `test_triage_playbook_exists` | `test_upload_playbooks.py` | `playbooks/triage.md` exists and is non-empty |
+| `test_fix_playbook_exists` | `test_upload_playbooks.py` | `playbooks/fix.md` exists and is non-empty |
 
 ### QA
 
-- Run workflow → check Devin dashboard Settings → Library → Playbooks → "Bug Triage — cognitiveload" and "Bug Fix — cognitiveload" exist.
-- Re-run → confirm same playbook is reused (not duplicated).
+- Run workflow → Devin dashboard → Settings → Playbooks → confirm both exist.
+- Re-run with IDs → confirm updated (not duplicated).
 
 ---
 
@@ -462,61 +352,33 @@ def get_or_create_fix_playbook() -> str:
 
 ### What
 
-`triage.py` and `devin_fix.py` call the playbook manager before `create_session()` and pass `playbook_id`.
+`triage.py` and `devin_fix.py` read `TRIAGE_PLAYBOOK_ID` / `FIX_PLAYBOOK_ID`
+from environment variables and pass `playbook_id` to `create_session()`.
+No runtime API calls — the IDs are set once via secrets after running the
+upload workflow.
 
 ### Files & lines affected
 
 | File | Lines | Change |
 |---|---|---|
-| `orchestrator/triage.py` | L16 (new import) | Add `from orchestrator.playbook_manager import get_or_create_triage_playbook` |
-| `orchestrator/triage.py` | L160-167 | Before `create_session()`: `playbook_id = get_or_create_triage_playbook()`. Add `playbook_id=playbook_id` to `create_session()` call. |
-| `orchestrator/devin_fix.py` | L17 (new import) | Add `from orchestrator.playbook_manager import get_or_create_fix_playbook` |
-| `orchestrator/devin_fix.py` | L235-240 | Before `create_session()`: `playbook_id = get_or_create_fix_playbook()`. Add `playbook_id=playbook_id` to `create_session()` call. |
-
-### Detail
-
-The full `create_session()` call in `triage.py` becomes:
-
-```python
-schema = get_triage_schema()
-playbook_id = get_or_create_triage_playbook()
-
-session_id = devin.create_session(
-    prompt,
-    structured_output_schema=schema,
-    title=f"Triage: Issue #{issue_number} — {issue_title[:60]}",
-    tags=["triage", f"issue-{issue_number}"],
-    max_acu_limit=TRIAGE_MAX_ACU,
-    playbook_id=playbook_id,
-)
-```
-
-The full `create_session()` call in `devin_fix.py` becomes:
-
-```python
-playbook_id = get_or_create_fix_playbook()
-
-session_id = devin.create_session(
-    prompt,
-    title=f"Fix: Issue #{issue_number} — {issue_title[:60]}",
-    tags=["fix", f"issue-{issue_number}", f"pr-{pr_number}"],
-    max_acu_limit=FIX_MAX_ACU,
-    idempotent=True,
-    playbook_id=playbook_id,
-)
-```
+| `orchestrator/triage.py` | Module-level | `TRIAGE_PLAYBOOK_ID = os.environ.get("TRIAGE_PLAYBOOK_ID")` |
+| `orchestrator/triage.py` | `create_session()` call | Add `playbook_id=TRIAGE_PLAYBOOK_ID` |
+| `orchestrator/devin_fix.py` | Module-level | `FIX_PLAYBOOK_ID = os.environ.get("FIX_PLAYBOOK_ID")` |
+| `orchestrator/devin_fix.py` | `create_session()` call | Add `playbook_id=FIX_PLAYBOOK_ID` |
+| `.github/workflows/issue-triage.yml` | env block | `TRIAGE_PLAYBOOK_ID: ${{ secrets.TRIAGE_PLAYBOOK_ID }}` |
+| `.github/workflows/devin-fix.yml` | env block | `FIX_PLAYBOOK_ID: ${{ secrets.FIX_PLAYBOOK_ID }}` |
 
 ### Unit tests
 
 | Test | File | What it asserts |
 |---|---|---|
-| `test_triage_passes_playbook_id` | `test_triage.py` | Mock `get_or_create_triage_playbook` returning `"pb_triage_1"` → assert `devin.create_session` called with `playbook_id="pb_triage_1"`. |
-| `test_fix_passes_playbook_id` | `test_devin_fix.py` | Mock `get_or_create_fix_playbook` returning `"pb_fix_1"` → assert `devin.create_session` called with `playbook_id="pb_fix_1"`. |
+| `test_triage_session_has_playbook_id` | `test_triage.py` | Patch `TRIAGE_PLAYBOOK_ID` → assert `create_session` called with `playbook_id`. |
+| `test_fix_session_has_playbook_id` | `test_devin_fix.py` | Patch `FIX_PLAYBOOK_ID` → assert `create_session` called with `playbook_id`. |
 
 ### QA
 
-- Trigger triage → Devin dashboard shows session linked to "Bug Triage — cognitiveload" playbook.
-- Trigger fix → Devin dashboard shows session linked to "Bug Fix — cognitiveload" playbook.
+- Set `TRIAGE_PLAYBOOK_ID` secret → trigger triage → Devin dashboard shows session linked to playbook.
+- Without the secret → session works fine (playbook_id=None is ignored by the API).
 
 ---
 
@@ -528,24 +390,31 @@ session_id = devin.create_session(
 | `orchestrator/prompt_builder.py` | **Modified** | D2 |
 | `orchestrator/triage.py` | **Modified** | D2, D4, D5, D6, D9 |
 | `orchestrator/devin_fix.py` | **Modified** | D3, D4, D5, D6, D7, D9 |
-| `orchestrator/playbook_manager.py` | **New** | D8 |
+| `playbooks/triage.md` | **New** | D8 |
+| `playbooks/fix.md` | **New** | D8 |
+| `scripts/upload_playbooks.py` | **New** | D8 |
+| `.github/workflows/upload-playbooks.yml` | **New** | D8 |
+| `.github/workflows/issue-triage.yml` | **Modified** | D6, D9 |
+| `.github/workflows/devin-fix.yml` | **Modified** | D6, D9 |
 | `orchestrator/tests/test_devin_client.py` | **Modified** | D1 |
 | `orchestrator/tests/test_triage.py` | **Modified** | D2, D4, D5, D6, D9 |
 | `orchestrator/tests/test_devin_fix.py` | **Modified** | D3, D4, D5, D6, D7, D9 |
-| `orchestrator/tests/test_playbook_manager.py` | **New** | D8 |
+| `orchestrator/tests/test_upload_playbooks.py` | **New** | D8 |
 
-### New tests: ~20 | Modified tests: ~5 | Deleted code: `_find_fix_pr()` + `_mock_pr_response()`
+### New tests: 23 | Deleted code: `_find_fix_pr()` + `_mock_pr_response()`
 
 ---
 
-## Implementation Order
+## Implementation Order (actual)
 
-The deliverables should be implemented in this order to avoid breakage:
+1. **D1** — Extend `create_session()` signature ✅ `63ccdd5`
+2. **D3** — Native PR detection + delete `_find_fix_pr()` ✅ `10163a3`
+3. **D2** — Structured output schema ✅ `3e03165`
+4. **D4** — Session titles ✅ `ec565b4`
+5. **D5** — Session tags ✅ `6accdb9`
+6. **D7** — Idempotent fix sessions ✅ `6c9aa31`
+7. **D8** — Playbook content + upload script + workflow ✅ `8dc9509`
+8. **D9** — Wire playbook IDs into triage + fix ✅ `5549773`
+9. **D6** — ACU cost limits ✅ `37e8f36`
 
-1. **D1** — Extend `create_session()` signature (foundation for everything else)
-2. **D3** — Native PR detection + delete `_find_fix_pr()` (standalone, no deps)
-3. **D2** — Structured output schema (needs D1)
-4. **D4+D5+D6+D7** — Titles, tags, ACU limits, idempotent flag (all simple kwargs, can be done together after D1)
-5. **D8** — Playbook manager (new file, standalone)
-6. **D9** — Wire playbooks into triage + fix (needs D1 + D8)
-7. Run full test suite → verify ≥92 tests passing + all new tests green
+Final test count: **115 tests passing** (up from 92 pre-Story 8).
