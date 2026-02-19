@@ -1,0 +1,45 @@
+name: Upload Devin Playbooks
+
+on:
+  workflow_dispatch:
+    inputs:
+      triage_playbook_id:
+        description: "Existing triage playbook ID (leave blank to create new)"
+        required: false
+        default: ""
+      fix_playbook_id:
+        description: "Existing fix playbook ID (leave blank to create new)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: Upload Playbooks to Devin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Upload playbooks
+        env:
+          DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
+        run: |
+          args=""
+          if [ -n "${{ inputs.triage_playbook_id }}" ]; then
+            args="$args --triage-id ${{ inputs.triage_playbook_id }}"
+          fi
+          if [ -n "${{ inputs.fix_playbook_id }}" ]; then
+            args="$args --fix-id ${{ inputs.fix_playbook_id }}"
+          fi
+          python scripts/upload_playbooks.py $args
