@@ -27,15 +27,9 @@ TRIAGE_MAX_ACU = int(os.environ.get("TRIAGE_MAX_ACU", "5")) or None
 # Template rendering
 # ---------------------------------------------------------------------------
 
-_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "triage_comment.md")
-
 
 def _render_comment(card: dict[str, Any]) -> str:
-    """Render a triage card dict into a Markdown comment body.
-
-    Uses Jinja-style template from Story 2.  We do simple str.replace to avoid
-    pulling in Jinja2 as a dependency (keeping footprint light for the PoC).
-    """
+    """Render a triage card dict into a Markdown comment body."""
     json_str = json.dumps(card, indent=2)
 
     # --- build sections ---

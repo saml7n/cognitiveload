@@ -13,7 +13,7 @@ from orchestrator.pr_nudge import (
     PR_NUDGE_MARKER,
     MAX_MATCHES,
     is_fixable,
-    _extract_card_from_comment,
+    extract_card_from_comment,
     _match_paths,
     _normalize_path,
     _normalize_affected_paths,
@@ -74,7 +74,7 @@ class TestNormalizeAffectedPaths(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestExtractCardFromComment(unittest.TestCase):
-    """_extract_card_from_comment parses embedded triage JSON."""
+    """extract_card_from_comment parses embedded triage JSON."""
 
     def test_parses_valid_embedded_json(self):
         card_data = {
@@ -88,23 +88,23 @@ class TestExtractCardFromComment(unittest.TestCase):
             "## Triage Card\nSome text\n\n"
             f"<!-- devin-triage:v1\n{json.dumps(card_data)}\n-->"
         )
-        result = _extract_card_from_comment(body)
+        result = extract_card_from_comment(body)
         self.assertIsNotNone(result)
         self.assertEqual(result["classification"], "bug")
         self.assertAlmostEqual(result["confidence"], 0.92)
 
     def test_returns_none_for_missing_marker(self):
         body = "Just a regular comment with no embedded card."
-        self.assertIsNone(_extract_card_from_comment(body))
+        self.assertIsNone(extract_card_from_comment(body))
 
     def test_returns_none_for_invalid_json(self):
         body = "<!-- devin-triage:v1\n{not valid json\n-->"
-        self.assertIsNone(_extract_card_from_comment(body))
+        self.assertIsNone(extract_card_from_comment(body))
 
     def test_handles_extra_whitespace(self):
         card_data = {"classification": "feature-request", "confidence": 0.8}
         body = f"<!--  devin-triage:v1\n  {json.dumps(card_data)}  \n -->"
-        result = _extract_card_from_comment(body)
+        result = extract_card_from_comment(body)
         self.assertIsNotNone(result)
         self.assertEqual(result["classification"], "feature-request")
 

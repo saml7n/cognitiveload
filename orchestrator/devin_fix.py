@@ -16,7 +16,11 @@ from orchestrator.devin_client import DevinClient
 from orchestrator.github_client import GitHubClient, DEFAULT_MARKER
 from orchestrator.fix_prompt_builder import build_fix_prompt
 from orchestrator.playbook_ids import FIX_PLAYBOOK_ID
-from orchestrator.pr_nudge import PR_NUDGE_MARKER, _normalize_affected_paths
+from orchestrator.pr_nudge import (
+    PR_NUDGE_MARKER,
+    _normalize_affected_paths,
+    extract_card_from_comment,
+)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -56,21 +60,6 @@ def detect_ticked_issues(old_body: str, new_body: str) -> list[int]:
 # ---------------------------------------------------------------------------
 # Triage card extraction (from the *issue's* triage comment)
 # ---------------------------------------------------------------------------
-
-
-def extract_card_from_comment(body: str) -> dict[str, Any] | None:
-    """Extract the triage card JSON embedded in an HTML comment.
-
-    Looks for: ``<!-- devin-triage:v1\\n{...json...}\\n-->``
-    """
-    pattern = r"<!--\s*devin-triage:v1\s*\n(.*?)\n\s*-->"
-    match = re.search(pattern, body, re.DOTALL)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(1).strip())
-    except (json.JSONDecodeError, ValueError):
-        return None
 
 
 def fetch_triage_card(

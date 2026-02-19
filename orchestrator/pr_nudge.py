@@ -48,7 +48,7 @@ def is_fixable(card: dict[str, Any]) -> bool:
 # Card extraction from issue comments
 # ---------------------------------------------------------------------------
 
-def _extract_card_from_comment(body: str) -> dict[str, Any] | None:
+def extract_card_from_comment(body: str) -> dict[str, Any] | None:
     """Extract the triage card JSON embedded in an HTML comment.
 
     Looks for the pattern: <!-- devin-triage:v1\n{...json...}\n-->
@@ -238,7 +238,7 @@ def nudge_pr(
         for c in comments:
             body = c.get("body", "")
             if DEFAULT_MARKER in body:
-                card = _extract_card_from_comment(body)
+                card = extract_card_from_comment(body)
                 break
 
         if card is None:
