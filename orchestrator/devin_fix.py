@@ -214,6 +214,7 @@ def attempt_fix(
         prompt,
         title=f"Fix: Issue #{issue_number} \u2014 {issue_title[:60]}",
         tags=["fix", f"issue-{issue_number}", f"pr-{pr_number}"],
+        idempotent=True,
     )
     logger.info("Devin fix session started: %s", session_id)
 

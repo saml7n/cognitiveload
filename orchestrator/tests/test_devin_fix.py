@@ -419,6 +419,37 @@ class TestAttemptFix(unittest.TestCase):
         kwargs = devin.create_session.call_args.kwargs
         self.assertEqual(kwargs["tags"], ["fix", "issue-2", "pr-10"])
 
+    @patch("orchestrator.devin_fix.GitHubClient")
+    @patch("orchestrator.devin_fix.DevinClient")
+    def test_fix_session_is_idempotent(self, MockDevin, MockGH):
+        """create_session must pass idempotent=True for fix sessions."""
+        devin = MockDevin.return_value
+        devin.create_session.return_value = "sess-idem"
+        devin.poll_session.return_value = {
+            "status_enum": "finished",
+            "messages": [],
+            "pull_request": {"url": "https://github.com/owner/repo/pull/99"},
+        }
+
+        gh = MockGH.return_value
+        gh.base_url = "https://api.github.com"
+        gh.get_issue_comments.return_value = [
+            {"body": _make_triage_comment(VALID_CARD)},
+        ]
+        gh._session.get.side_effect = [
+            self._mock_issue_response(title="Off-by-one"),
+        ]
+
+        attempt_fix(
+            repo="owner/repo",
+            pr_number=10,
+            issue_number=2,
+            comment_body=_make_nudge_body(2, ticked={2}),
+        )
+
+        kwargs = devin.create_session.call_args.kwargs
+        self.assertTrue(kwargs.get("idempotent"), "fix session must be idempotent")
+
 
 # ---------------------------------------------------------------------------
 # Fix prompt builder
