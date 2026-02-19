@@ -13,14 +13,12 @@ from typing import Any
 
 from orchestrator.devin_client import DevinClient
 from orchestrator.github_client import GitHubClient, DEFAULT_MARKER
+from orchestrator.playbook_ids import TRIAGE_PLAYBOOK_ID
 from orchestrator.prompt_builder import build_triage_prompt, get_triage_schema
 from orchestrator.validation import validate_triage_card
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
-
-# Optional playbook — set via 'Upload Devin Playbooks' workflow.
-TRIAGE_PLAYBOOK_ID = os.environ.get("TRIAGE_PLAYBOOK_ID")
 
 # Max ACU spend per triage session (cost guard-rail). 0 or unset = no limit.
 TRIAGE_MAX_ACU = int(os.environ.get("TRIAGE_MAX_ACU", "5")) or None
@@ -29,15 +27,9 @@ TRIAGE_MAX_ACU = int(os.environ.get("TRIAGE_MAX_ACU", "5")) or None
 # Template rendering
 # ---------------------------------------------------------------------------
 
-_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "triage_comment.md")
-
 
 def _render_comment(card: dict[str, Any]) -> str:
-    """Render a triage card dict into a Markdown comment body.
-
-    Uses Jinja-style template from Story 2.  We do simple str.replace to avoid
-    pulling in Jinja2 as a dependency (keeping footprint light for the PoC).
-    """
+    """Render a triage card dict into a Markdown comment body."""
     json_str = json.dumps(card, indent=2)
 
     # --- build sections ---
@@ -165,7 +157,7 @@ def triage_issue(
         issue_number=issue_number,
         issue_title=issue_title,
         issue_body=issue_body,
-        playbook_active=bool(TRIAGE_PLAYBOOK_ID),
+        playbook_active=True,
     )
     logger.info("Prompt built (%d chars).", len(prompt))
 

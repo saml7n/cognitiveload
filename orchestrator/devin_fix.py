@@ -15,7 +15,12 @@ from typing import Any
 from orchestrator.devin_client import DevinClient
 from orchestrator.github_client import GitHubClient, DEFAULT_MARKER
 from orchestrator.fix_prompt_builder import build_fix_prompt
-from orchestrator.pr_nudge import PR_NUDGE_MARKER, _normalize_affected_paths
+from orchestrator.playbook_ids import FIX_PLAYBOOK_ID
+from orchestrator.pr_nudge import (
+    PR_NUDGE_MARKER,
+    _normalize_affected_paths,
+    extract_card_from_comment,
+)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -26,9 +31,6 @@ LABEL_FIX_FAILED = "devin:fix-failed"
 
 # Timeout for the fix session (longer than triage — fixes take more time).
 FIX_SESSION_TIMEOUT = 1200  # 20 minutes
-
-# Optional playbook — set via 'Upload Devin Playbooks' workflow.
-FIX_PLAYBOOK_ID = os.environ.get("FIX_PLAYBOOK_ID")
 
 # Max ACU spend per fix session (cost guard-rail). 0 or unset = no limit.
 FIX_MAX_ACU = int(os.environ.get("FIX_MAX_ACU", "10")) or None
@@ -58,21 +60,6 @@ def detect_ticked_issues(old_body: str, new_body: str) -> list[int]:
 # ---------------------------------------------------------------------------
 # Triage card extraction (from the *issue's* triage comment)
 # ---------------------------------------------------------------------------
-
-
-def extract_card_from_comment(body: str) -> dict[str, Any] | None:
-    """Extract the triage card JSON embedded in an HTML comment.
-
-    Looks for: ``<!-- devin-triage:v1\\n{...json...}\\n-->``
-    """
-    pattern = r"<!--\s*devin-triage:v1\s*\n(.*?)\n\s*-->"
-    match = re.search(pattern, body, re.DOTALL)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(1).strip())
-    except (json.JSONDecodeError, ValueError):
-        return None
 
 
 def fetch_triage_card(
@@ -220,7 +207,7 @@ def attempt_fix(
         issue_title=issue_title,
         issue_body=issue_body,
         triage_card=card,
-        playbook_active=bool(FIX_PLAYBOOK_ID),
+        playbook_active=True,
     )
     logger.info("Fix prompt built (%d chars).", len(prompt))
 
