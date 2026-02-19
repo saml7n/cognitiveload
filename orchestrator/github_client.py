@@ -97,6 +97,53 @@ class GitHubClient:
         resp.raise_for_status()
 
     # ------------------------------------------------------------------
+    # Issue helpers
+    # ------------------------------------------------------------------
+
+    def list_issues(
+        self, repo: str, labels: list[str], state: str = "open"
+    ) -> list[dict]:
+        """Return issues matching *labels* (AND logic) and *state*."""
+        url = f"{self.base_url}/repos/{repo}/issues"
+        issues: list[dict] = []
+        page = 1
+        while True:
+            resp = self._session.get(
+                url,
+                params={
+                    "labels": ",".join(labels),
+                    "state": state,
+                    "per_page": 100,
+                    "page": page,
+                },
+            )
+            resp.raise_for_status()
+            batch = resp.json()
+            if not batch:
+                break
+            # GitHub's /issues endpoint also returns PRs; filter them out.
+            issues.extend(i for i in batch if "pull_request" not in i)
+            page += 1
+        return issues
+
+    def get_issue_comments(
+        self, repo: str, issue_number: int
+    ) -> list[dict]:
+        """Return all comments on an issue."""
+        url = f"{self.base_url}/repos/{repo}/issues/{issue_number}/comments"
+        comments: list[dict] = []
+        page = 1
+        while True:
+            resp = self._session.get(url, params={"per_page": 100, "page": page})
+            resp.raise_for_status()
+            batch = resp.json()
+            if not batch:
+                break
+            comments.extend(batch)
+            page += 1
+        return comments
+
+    # ------------------------------------------------------------------
     # PR helpers
     # ------------------------------------------------------------------
 

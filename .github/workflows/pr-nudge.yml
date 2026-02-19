@@ -1,0 +1,37 @@
+name: PR Nudge (Triaged Issues)
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  issues: read           # Read issue comments / labels
+  pull-requests: write   # Post nudge comments on PRs
+  contents: read         # Checkout the repo
+
+jobs:
+  nudge:
+    name: Check for Related Triaged Issues
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install requests jsonschema pydantic python-dotenv
+
+      - name: Run PR nudge orchestrator
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          PYTHONPATH=. python -m orchestrator.pr_nudge

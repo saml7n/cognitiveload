@@ -238,15 +238,15 @@ This is the first story where all the pieces come together into a running GitHub
 As a **developer opening a PR**, I want to **see a heads-up when my changes touch code linked to a known issue**, so that **I can fix it while I'm already in that context instead of discovering it later**.
 
 ### Acceptance criteria
-- [ ] A GitHub Actions workflow exists at `.github/workflows/pr-nudge.yml` triggered on `pull_request` (opened + synchronize).
-- [ ] When triggered, the workflow:
+- [x] A GitHub Actions workflow exists at `.github/workflows/pr-nudge.yml` triggered on `pull_request` (opened + synchronize).
+- [x] When triggered, the workflow:
   1. Fetches the list of files changed in the PR.
   2. Queries open issues with the `devin:triaged` label.
   3. Parses the embedded triage JSON from each issue's bot comment.
   4. Matches PR changed files against each issue's `affected_paths`.
   5. If matches found: posts/updates a single PR comment listing matched issues, why they matched, and a suggested next step.
-- [ ] If no matches are found, the bot is silent (no comment posted).
-- [ ] Reruns update the existing PR comment (no duplicates).
+- [x] If no matches are found, the bot is silent (no comment posted).
+- [x] Reruns update the existing PR comment (no duplicates).
 
 ### Verification
 - Open a PR that touches files matching a triaged issue's affected paths → nudge comment appears.
@@ -259,9 +259,9 @@ As a **developer opening a PR**, I want to **see a heads-up when my changes touc
 3. Should the PR comment include a decision prompt (checkbox: fix now / defer) or be informational only?
 
 **Recorded answers:**
-- Nudge label(s): _unanswered_
-- Match cap: _unanswered_
-- PR comment style: _unanswered_
+- Nudge label(s): `devin:triaged` only — only issues with validated triage cards.
+- Match cap: Top 5 matches; show "…and N more" if exceeded.
+- PR comment style: Informational only — no checkboxes; hint "Consider fixing while you're in this area."
 
 ---
 
