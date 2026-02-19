@@ -326,11 +326,11 @@ When a user edits the triage comment to tick the checkbox (`- [x]`), a new workf
 5. Should fix mode work for `feature-request` too, or bugs only?
 
 **Recorded answers:**
-- Write permissions: _unanswered_
-- Branch naming: _unanswered_
-- Test scope: _unanswered_
-- Fix timeout: _unanswered_
-- Feature-request fix: _unanswered_
+- Write permissions: Yes — `contents: write` and `pull-requests: write` permitted.
+- Branch naming: `devin/fix-issue-{number}` convention confirmed.
+- Test scope: Both — targeted repro test first, then full test suite to catch regressions.
+- Fix timeout: 15–20 minutes confirmed.
+- Feature-request fix: Bugs only — `feature-request`, `question`, and `unclear` do not get the checkbox.
 
 ---
 
