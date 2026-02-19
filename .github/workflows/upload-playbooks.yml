@@ -31,8 +31,7 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Upload playbooks
-        id: upload
+      - name: Upload/update playbooks
         env:
           DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
         run: |
@@ -44,15 +43,5 @@ jobs:
             args="$args --fix-id ${{ inputs.fix_playbook_id }}"
           fi
           python scripts/upload_playbooks.py $args
-
-      # Store the IDs as GitHub repo variables so other workflows
-      # pick them up automatically — no manual secret-setting needed.
-      - name: Save playbook IDs as repo variables
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh variable set TRIAGE_PLAYBOOK_ID \
-            --body "${{ steps.upload.outputs.triage_playbook_id }}"
-          gh variable set FIX_PLAYBOOK_ID \
-            --body "${{ steps.upload.outputs.fix_playbook_id }}"
-          echo "✓ Repo variables updated"
+          echo "Playbook IDs are hardcoded in orchestrator/playbook_ids.py."
+          echo "If you created NEW playbooks, update that file with the IDs above."

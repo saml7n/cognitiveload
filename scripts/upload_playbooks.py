@@ -10,8 +10,8 @@ Usage:
     DEVIN_API_KEY=apk_... python scripts/upload_playbooks.py \
         --triage-id pb_abc123 --fix-id pb_def456
 
-Outputs the playbook IDs to stdout — store them as GitHub Actions secrets
-(TRIAGE_PLAYBOOK_ID / FIX_PLAYBOOK_ID) or in your .env file.
+Outputs the playbook IDs to stdout — if they differ from
+orchestrator/playbook_ids.py, update that file and commit.
 """
 
 import argparse
@@ -103,14 +103,8 @@ def main() -> None:
     print("─── Playbook IDs ───")
     print(f"TRIAGE_PLAYBOOK_ID={results['triage']}")
     print(f"FIX_PLAYBOOK_ID={results['fix']}")
-
-    # Emit as GitHub Actions step outputs when running in CI.
-    gh_output = os.environ.get("GITHUB_OUTPUT")
-    if gh_output:
-        with open(gh_output, "a") as fh:
-            fh.write(f"triage_playbook_id={results['triage']}\n")
-            fh.write(f"fix_playbook_id={results['fix']}\n")
-        print("\n(Playbook IDs written to $GITHUB_OUTPUT)", file=sys.stderr)
+    print()
+    print("If these differ from orchestrator/playbook_ids.py, update that file.")
 
 
 if __name__ == "__main__":
