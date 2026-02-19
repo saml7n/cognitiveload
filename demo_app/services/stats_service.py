@@ -11,8 +11,7 @@ def calculate_summary():
     total_credit = sum(e.amount for e in ledger if e.type == TransactionType.CREDIT)
     total_debit = sum(e.amount for e in ledger if e.type == TransactionType.DEBIT)
     
-    # Bug A: should be len(ledger), but uses len(ledger) - 1
-    count = len(ledger) - 1 
+    count = len(ledger)
     
     # Bug C: applying the drifting multiplier from core/config.py
     multiplier = get_current_fee_multiplier()
