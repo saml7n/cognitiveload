@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install orchestrator dependencies
+        run: uv sync --directory orchestrator
+
+      - name: Run orchestrator tests
+        run: PYTHONPATH=orchestrator uv run --directory orchestrator pytest orchestrator/tests/ -v
+
+      - name: Install demo_app dependencies
+        run: uv sync --directory demo_app
+
+      - name: Run demo_app tests
+        run: uv run --directory demo_app pytest demo_app/tests/ -v
