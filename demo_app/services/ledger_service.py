@@ -11,7 +11,6 @@ _ledger = [
 def list_entries(sort_by_priority: bool = False) -> List[LedgerEntry]:
     """
     Returns all ledger entries.
-    If sort_by_priority is True, entries are sorted by priority (HIGH first).
     """
     results = list(_ledger)
     if sort_by_priority:
