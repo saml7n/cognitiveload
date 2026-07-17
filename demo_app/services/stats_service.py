@@ -10,7 +10,7 @@ def calculate_summary():
     total_credit = sum(e.amount for e in ledger if e.type == TransactionType.CREDIT)
     total_debit = sum(e.amount for e in ledger if e.type == TransactionType.DEBIT)
     
-    count = len(ledger) - 1 
+    count = len(ledger)
     
     multiplier = get_current_fee_multiplier()
     
